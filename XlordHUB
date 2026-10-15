@@ -1,5 +1,5 @@
 --====================================================
--- XLORD HUB V15 | BROOKHAVEN RP
+-- XLORD HUB V16 | BROOKHAVEN RP
 -- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
@@ -78,7 +78,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V15"
+header.Text = "XLORD | V16"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -158,12 +158,12 @@ targetLabel.Parent = main
 
 local teleport = button(main, "Teleport", "TELEPORT TO PLAYER", COLORS.green)
 local fling = button(main, "SofaFling", "AUTO SOFA : START", COLORS.orange)
-local trampolineButton = button(main, "Trampoline", "SPAWN TRAMPOLINE", COLORS.purple)
+local trampolineButton = button(main, "Trampoline", "AMBIL TRAMPOLINE MERAH", COLORS.purple)
 
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V15 siap digunakan"
+status.Text = "XLORD V16 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -242,7 +242,7 @@ local function applySize(newWidth, newHeight)
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V15"
+    header.Text = width < 275 and "XLORD" or "XLORD | V16"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
@@ -308,106 +308,101 @@ watchCamera()
 local selectedPlayer
 
 --====================================================
--- TRAMPOLINE: LOCAL VISUAL PROP UNDER SELECTED PLAYER
--- No spoofed server remote; other clients won't see this
--- unless the game provides an authorized server-side prop.
+-- TRAMPOLINE: STEP 1 - REQUEST THE REAL GAME ITEM AND EQUIP
+-- Not a locally drawn replica. The exact server-side item key
+-- is unverified: "Trampoline" is a best-effort candidate.
 --====================================================
-local spawnedTrampoline = nil
+local trampolineRequestBusy = false
 
-local function trampolinePart(parent, name, size, cf, color, collides)
-    local p = Instance.new("Part")
-    p.Name = name
-    p.Size = size
-    p.CFrame = cf
-    p.Anchored = true
-    p.CanCollide = collides or false
-    p.CanTouch = collides or false
-    p.Material = Enum.Material.SmoothPlastic
-    p.Color = color
-    p.TopSurface = Enum.SurfaceType.Smooth
-    p.BottomSurface = Enum.SurfaceType.Smooth
-    p.Parent = parent
-    return p
+local function isTrampolineTool(instance)
+    if not instance or not instance:IsA("Tool") then return false end
+    local simpleName = instance.Name:lower():gsub("[%s_%-]", "")
+    return simpleName:find("trampoline", 1, true) ~= nil
+        or simpleName:find("trampolin", 1, true) ~= nil
 end
 
-local function spawnTrampolineUnderTarget()
-    local player = selectedPlayer
-    if not player or player.Parent ~= Players then
-        setStatus("Pilih target terlebih dahulu")
-        return
-    end
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not root or not hum or hum.Health <= 0 then
-        setStatus("Target belum siap")
-        return
-    end
-
-    -- Standard R15/R6 foot approximation from HumanoidRootPart.
-    local feetY = root.Position.Y - root.Size.Y / 2 - hum.HipHeight
-    local basePosition = Vector3.new(root.Position.X, feetY + 0.95, root.Position.Z)
-
-    if spawnedTrampoline then
-        spawnedTrampoline:Destroy()
-        spawnedTrampoline = nil
-    end
-
-    local model = Instance.new("Model")
-    model.Name = "XLORD_LocalTrampoline"
-    model.Parent = workspace
-    spawnedTrampoline = model
-
-    -- Circular trampoline surface; cylinder axis is X, rotated to Y.
-    local mat = trampolinePart(
-        model, "JumpMat", Vector3.new(0.25, 8.2, 8.2),
-        CFrame.new(basePosition) * CFrame.Angles(0, 0, math.rad(90)),
-        Color3.fromRGB(30, 37, 60), true
-    )
-    mat.Shape = Enum.PartType.Cylinder
-    mat.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.15, 0.8, 100, 100)
-
-    local radius = 4.35
-    local segments = 18
-    for i = 1, segments do
-        local a0 = (i - 1) * math.pi * 2 / segments
-        local a1 = i * math.pi * 2 / segments
-        local p0 = basePosition + Vector3.new(math.cos(a0) * radius, 0, math.sin(a0) * radius)
-        local p1 = basePosition + Vector3.new(math.cos(a1) * radius, 0, math.sin(a1) * radius)
-        local mid = (p0 + p1) / 2
-        local piece = trampolinePart(
-            model, "SafetyRing", Vector3.new(0.3, 0.3, (p1 - p0).Magnitude + 0.03),
-            CFrame.lookAt(mid, p1), Color3.fromRGB(130, 85, 235), false
-        )
-        piece.Material = Enum.Material.Neon
-    end
-
-    for i = 1, 4 do
-        local a = (i - 1) * math.pi / 2 + math.pi / 4
-        local pos = basePosition + Vector3.new(math.cos(a)*3.7, -0.5, math.sin(a)*3.7)
-        local leg = trampolinePart(
-            model, "SupportLeg", Vector3.new(0.32, 1.05, 0.32),
-            CFrame.new(pos), Color3.fromRGB(120, 135, 155), false
-        )
-        leg.Material = Enum.Material.Metal
-    end
-
-    -- Only your own character can be bounced reliably by this local test.
-    mat.Touched:Connect(function(hit)
-        if not gui.Parent or spawnedTrampoline ~= model then return end
-        if not localPlayer.Character or not hit:IsDescendantOf(localPlayer.Character) then return end
-        local selfRoot = localPlayer.Character:FindFirstChild("HumanoidRootPart")
-        local selfHum = localPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if selfRoot and selfHum and selfHum.Health > 0 then
-            local v = selfRoot.AssemblyLinearVelocity
-            selfRoot.AssemblyLinearVelocity = Vector3.new(v.X, math.max(v.Y, 75), v.Z)
+local function findOwnedTrampoline(character, backpack)
+    for _, container in ipairs({character, backpack}) do
+        if container then
+            for _, item in ipairs(container:GetChildren()) do
+                if isTrampolineTool(item) then return item end
+            end
         end
-    end)
-
-    setStatus("Trampoline dibuat di bawah @" .. player.Name .. " (lokal)")
+    end
+    return nil
 end
 
-listen(trampolineButton.MouseButton1Click:Connect(spawnTrampolineUnderTarget))
+local function takeRealTrampoline()
+    if trampolineRequestBusy then
+        setStatus("Masih mencoba mengambil trampoline...")
+        return
+    end
+    trampolineRequestBusy = true
+    task.spawn(function()
+        local character = localPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local backpack = localPlayer:FindFirstChildOfClass("Backpack")
+        if not character or not humanoid or humanoid.Health <= 0 or not backpack then
+            setStatus("Karakter/Backpack belum siap")
+            trampolineRequestBusy = false
+            return
+        end
+
+        local trampoline = findOwnedTrampoline(character, backpack)
+        if not trampoline then
+            local re = ReplicatedStorage:FindFirstChild("RE")
+            local remote = re and re:FindFirstChild("1Too1l")
+            if remote and remote:IsA("RemoteFunction") then
+                setStatus("Meminta item Trampoline ke game...")
+                local ok, message = pcall(function()
+                    remote:InvokeServer("PickingTools", "Trampoline")
+                end)
+                if not ok then
+                    warn("[XLORD V16] Permintaan Trampoline ditolak:", message)
+                end
+            else
+                warn("[XLORD V16] Remote pengambilan item tidak tersedia")
+            end
+
+            -- Give the inventory time to receive the requested item.
+            for _ = 1, 25 do
+                if not gui.Parent or localPlayer.Character ~= character then break end
+                trampoline = findOwnedTrampoline(character, backpack)
+                if trampoline then break end
+                task.wait(0.1)
+            end
+        end
+
+        if not gui.Parent then
+            trampolineRequestBusy = false
+            return
+        end
+        if not trampoline then
+            setStatus("Trampoline asli belum ditemukan. Pilih item merah dari inventory game, lalu tekan tombol lagi.")
+            print("[XLORD V16] Nama Tool di Backpack:")
+            for _, item in ipairs(backpack:GetChildren()) do
+                if item:IsA("Tool") then print(" -", item.Name) end
+            end
+            trampolineRequestBusy = false
+            return
+        end
+
+        local ok, err = pcall(function()
+            humanoid:EquipTool(trampoline)
+        end)
+        task.wait(0.15)
+        if ok and trampoline.Parent == character then
+            setStatus("Trampoline asli di tangan: " .. trampoline.Name .. " | Belum ditempatkan")
+            print("[XLORD V16] Tool trampoline ditemukan:", trampoline:GetFullName())
+        else
+            setStatus("Trampoline ditemukan, tetapi gagal dipakai di tangan")
+            if not ok then warn("[XLORD V16] Equip error:", err) end
+        end
+        trampolineRequestBusy = false
+    end)
+end
+
+listen(trampolineButton.MouseButton1Click:Connect(takeRealTrampoline))
 
 --====================================================
 -- LIVE MAP POSITION HUD (own character + selected target)
@@ -1124,7 +1119,6 @@ end))
 -- CLEANUP AND RUN
 --====================================================
 gui.Destroying:Connect(function()
-    if spawnedTrampoline then spawnedTrampoline:Destroy() end
     stopFling(true)
     if cameraConnection then cameraConnection:Disconnect() end
     for _, connection in ipairs(connections) do
@@ -1134,4 +1128,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V15] Loaded: Auto Sofa, Teleport, local Trampoline, XYZ, resize, minimize")
+print("[XLORD V16] Loaded: Auto Sofa, Teleport, real Trampoline equip test, XYZ, resize, minimize")
