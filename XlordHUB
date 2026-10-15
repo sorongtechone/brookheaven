@@ -1,0 +1,1103 @@
+
+--==========================================
+-- XLORD V4 | BROOKHAVEN RP
+-- TELEPORT + SOFA FLING
+-- RESIZE + MINIMIZE + CONFIRM CLOSE
+--==========================================
+
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+
+local LP = Players.LocalPlayer
+local PlayerGui = LP:WaitForChild("PlayerGui")
+
+--==========================================
+-- CLEAN PREVIOUS GUI
+--==========================================
+
+local old = PlayerGui:FindFirstChild("XLORD_Teleport")
+
+if old then
+    old:Destroy()
+end
+
+--==========================================
+-- VARIABLES
+--==========================================
+
+local selected = nil
+local running = false
+local token = 0
+local originalPos = nil
+local activeChar = nil
+local spinForce = nil
+local pushForce = nil
+local connections = {}
+
+local MIN_SCALE = 0.45
+local MAX_SCALE = 1.25
+local DEFAULT_SCALE = 0.78
+
+local function bind(connection)
+    table.insert(connections, connection)
+    return connection
+end
+
+local function corner(parent, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 8)
+    c.Parent = parent
+    return c
+end
+
+local function makeButton(
+    parent, name, txt, pos, size, color
+)
+    local b = Instance.new("TextButton")
+    b.Name = name
+    b.Size = size
+    b.Position = pos
+    b.BackgroundColor3 = color
+    b.BorderSizePixel = 0
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Text = txt
+    b.TextSize = 13
+    b.Font = Enum.Font.GothamBold
+    b.Parent = parent
+
+    corner(b, 8)
+    return b
+end
+
+--==========================================
+-- GUI ROOT
+--==========================================
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "XLORD_Teleport"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 1000
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = PlayerGui
+
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.fromOffset(320, 470)
+main.AnchorPoint = Vector2.new(0.5, 0.5)
+main.Position = UDim2.fromScale(0.5, 0.5)
+main.BackgroundColor3 = Color3.fromRGB(25, 27, 38)
+main.BorderSizePixel = 0
+main.Active = true
+main.Parent = gui
+
+corner(main, 12)
+
+--==========================================
+-- RESPONSIVE GUI SCALE
+--==========================================
+
+local scale = Instance.new("UIScale")
+scale.Name = "XLORD_UIScale"
+scale.Parent = main
+
+local function getMaxScale()
+    local camera = workspace.CurrentCamera
+
+    if not camera then
+        return 1.0
+    end
+
+    local view = camera.ViewportSize
+
+    local widthLimit = (view.X - 24) / 320
+    local heightLimit = (view.Y - 24) / 470
+
+    return math.max(
+        MIN_SCALE,
+        math.min(
+            MAX_SCALE,
+            widthLimit,
+            heightLimit
+        )
+    )
+end
+
+local function setScale(value)
+    scale.Scale = math.clamp(
+        value,
+        MIN_SCALE,
+        getMaxScale()
+    )
+end
+
+setScale(DEFAULT_SCALE)
+
+--==========================================
+-- HEADER
+--==========================================
+
+local header = Instance.new("TextLabel")
+header.Name = "Header"
+header.Size = UDim2.new(1, -165, 0, 44)
+header.Position = UDim2.fromOffset(12, 0)
+header.BackgroundTransparency = 1
+header.Text = "XLORD | V4"
+header.TextColor3 = Color3.new(1, 1, 1)
+header.TextSize = 17
+header.Font = Enum.Font.GothamBold
+header.TextXAlignment = Enum.TextXAlignment.Left
+header.Active = true
+header.Parent = main
+
+--==========================================
+-- WINDOW CONTROL BUTTONS
+--==========================================
+
+local shrink = makeButton(
+    main,
+    "Shrink",
+    "-",
+    UDim2.new(1, -152, 0, 7),
+    UDim2.fromOffset(33, 32),
+    Color3.fromRGB(65, 75, 100)
+)
+
+local enlarge = makeButton(
+    main,
+    "Enlarge",
+    "+",
+    UDim2.new(1, -115, 0, 7),
+    UDim2.fromOffset(33, 32),
+    Color3.fromRGB(45, 110, 210)
+)
+
+local minimize = makeButton(
+    main,
+    "Minimize",
+    "_",
+    UDim2.new(1, -78, 0, 7),
+    UDim2.fromOffset(33, 32),
+    Color3.fromRGB(55, 125, 95)
+)
+
+local close = makeButton(
+    main,
+    "Close",
+    "X",
+    UDim2.new(1, -41, 0, 7),
+    UDim2.fromOffset(33, 32),
+    Color3.fromRGB(205, 55, 65)
+)
+
+--==========================================
+-- FLOATING MINI BUTTON
+--==========================================
+
+local floating = makeButton(
+    gui,
+    "XLORD_Floating",
+    "XL",
+    UDim2.fromOffset(12, 160),
+    UDim2.fromOffset(44, 44),
+    Color3.fromRGB(35, 105, 210)
+)
+
+floating.TextSize = 16
+floating.Visible = false
+floating.Active = true
+floating.ZIndex = 100
+
+local floatingCorner =
+    floating:FindFirstChildOfClass("UICorner")
+
+if floatingCorner then
+    floatingCorner.CornerRadius = UDim.new(1, 0)
+end
+
+--==========================================
+-- SEARCH
+--==========================================
+
+local search = Instance.new("TextBox")
+search.Name = "Search"
+search.Size = UDim2.new(1, -20, 0, 36)
+search.Position = UDim2.fromOffset(10, 48)
+search.BackgroundColor3 = Color3.fromRGB(43, 46, 62)
+search.TextColor3 = Color3.new(1, 1, 1)
+search.PlaceholderColor3 =
+    Color3.fromRGB(165, 170, 180)
+search.PlaceholderText = "Cari nama pemain..."
+search.Text = ""
+search.TextSize = 14
+search.Font = Enum.Font.Gotham
+search.ClearTextOnFocus = false
+search.Parent = main
+
+corner(search, 8)
+
+--==========================================
+-- REFRESH PLAYERS
+--==========================================
+
+local refresh = makeButton(
+    main,
+    "Refresh",
+    "REFRESH PLAYERS",
+    UDim2.fromOffset(10, 91),
+    UDim2.new(1, -20, 0, 32),
+    Color3.fromRGB(48, 107, 215)
+)
+
+--==========================================
+-- PLAYER LIST
+--==========================================
+
+local scroll = Instance.new("ScrollingFrame")
+scroll.Name = "PlayerList"
+scroll.Size = UDim2.new(1, -20, 0, 174)
+scroll.Position = UDim2.fromOffset(10, 130)
+scroll.BackgroundColor3 =
+    Color3.fromRGB(33, 36, 49)
+scroll.BorderSizePixel = 0
+scroll.ScrollBarThickness = 4
+scroll.CanvasSize = UDim2.fromOffset(0, 0)
+scroll.ScrollingDirection =
+    Enum.ScrollingDirection.Y
+scroll.Parent = main
+
+corner(scroll, 8)
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 5)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = scroll
+
+bind(
+    layout:GetPropertyChangedSignal(
+        "AbsoluteContentSize"
+    ):Connect(function()
+
+        scroll.CanvasSize = UDim2.fromOffset(
+            0,
+            layout.AbsoluteContentSize.Y + 8
+        )
+
+    end)
+)
+
+--==========================================
+-- SELECTED PLAYER
+--==========================================
+
+local selectedLabel = Instance.new("TextLabel")
+selectedLabel.Name = "SelectedPlayer"
+selectedLabel.Size = UDim2.new(1, -20, 0, 28)
+selectedLabel.Position = UDim2.fromOffset(10, 310)
+selectedLabel.BackgroundTransparency = 1
+selectedLabel.Text = "Target: Belum dipilih"
+selectedLabel.TextColor3 =
+    Color3.fromRGB(130, 205, 255)
+selectedLabel.Font = Enum.Font.GothamBold
+selectedLabel.TextSize = 13
+selectedLabel.TextTruncate =
+    Enum.TextTruncate.AtEnd
+selectedLabel.Parent = main
+
+--==========================================
+-- TELEPORT BUTTON
+--==========================================
+
+local tpButton = makeButton(
+    main,
+    "Teleport",
+    "TELEPORT TO PLAYER",
+    UDim2.fromOffset(10, 344),
+    UDim2.new(1, -20, 0, 37),
+    Color3.fromRGB(40, 145, 100)
+)
+
+--==========================================
+-- SOFA FLING BUTTON
+--==========================================
+
+local flingButton = makeButton(
+    main,
+    "Fling",
+    "SOFA FLING : START",
+    UDim2.fromOffset(10, 389),
+    UDim2.new(1, -20, 0, 37),
+    Color3.fromRGB(185, 105, 38)
+)
+
+--==========================================
+-- STATUS LABEL
+--==========================================
+
+local status = Instance.new("TextLabel")
+status.Name = "Status"
+status.Size = UDim2.new(1, -20, 0, 36)
+status.Position = UDim2.fromOffset(10, 430)
+status.BackgroundTransparency = 1
+status.Text = "XLORD V4 siap digunakan"
+status.TextColor3 =
+    Color3.fromRGB(185, 190, 205)
+status.TextSize = 12
+status.TextWrapped = true
+status.Font = Enum.Font.Gotham
+status.Parent = main
+
+local function setStatus(message)
+    if gui.Parent then
+        status.Text = message
+    end
+end
+
+--==========================================
+-- STOP FLING / CLEANUP FORCES
+--==========================================
+
+local function removeForces()
+    if spinForce then
+        spinForce:Destroy()
+        spinForce = nil
+    end
+
+    if pushForce then
+        pushForce:Destroy()
+        pushForce = nil
+    end
+end
+
+local function stopFling(restore)
+    token = token + 1
+    running = false
+
+    removeForces()
+
+    if restore
+        and originalPos
+        and activeChar
+        and activeChar.Parent then
+
+        pcall(function()
+            activeChar:PivotTo(originalPos)
+
+            local root =
+                activeChar:FindFirstChild(
+                    "HumanoidRootPart"
+                )
+
+            if root then
+                root.AssemblyLinearVelocity =
+                    Vector3.zero
+
+                root.AssemblyAngularVelocity =
+                    Vector3.zero
+            end
+        end)
+    end
+
+    originalPos = nil
+    activeChar = nil
+
+    flingButton.Text = "SOFA FLING : START"
+    flingButton.BackgroundColor3 =
+        Color3.fromRGB(185, 105, 38)
+end
+
+--==========================================
+-- GET COUCH
+--==========================================
+
+local function getCouch()
+    local char = LP.Character
+    local backpack = LP:FindFirstChild("Backpack")
+
+    if not char or not backpack then
+        return nil, "Karakter belum tersedia"
+    end
+
+    local existing =
+        char:FindFirstChild("Couch")
+        or backpack:FindFirstChild("Couch")
+
+    if existing and existing:IsA("Tool") then
+        return existing
+    end
+
+    local re = RS:FindFirstChild("RE")
+    local remote =
+        re and re:FindFirstChild("1Too1l")
+
+    if not remote
+        or not remote:IsA("RemoteFunction") then
+
+        return nil, "Remote Couch tidak ditemukan"
+    end
+
+    local ok = pcall(function()
+        remote:InvokeServer(
+            "PickingTools",
+            "Couch"
+        )
+    end)
+
+    if not ok then
+        return nil, "Gagal mengambil Couch"
+    end
+
+    local couch =
+        backpack:WaitForChild("Couch", 3)
+        or char:FindFirstChild("Couch")
+
+    if not couch or not couch:IsA("Tool") then
+        return nil, "Couch tidak tersedia"
+    end
+
+    return couch
+end
+
+--==========================================
+-- START SOFA FLING
+--==========================================
+
+local function startFling()
+    if running then
+        return
+    end
+
+    if not selected or selected.Parent ~= Players then
+        setStatus("Pilih pemain terlebih dahulu!")
+        return
+    end
+
+    local target = selected
+    local char = LP.Character
+
+    local root =
+        char and char:FindFirstChild(
+            "HumanoidRootPart"
+        )
+
+    local hum =
+        char and char:FindFirstChildOfClass(
+            "Humanoid"
+        )
+
+    if not root or not hum or hum.Health <= 0 then
+        setStatus("Karakter sendiri belum siap")
+        return
+    end
+
+    local targetRoot =
+        target.Character and
+        target.Character:FindFirstChild(
+            "HumanoidRootPart"
+        )
+
+    if not targetRoot then
+        setStatus("Target belum siap")
+        return
+    end
+
+    running = true
+    token = token + 1
+
+    local thisToken = token
+
+    activeChar = char
+    originalPos = char:GetPivot()
+
+    flingButton.Text = "SOFA FLING : STOP"
+    flingButton.BackgroundColor3 =
+        Color3.fromRGB(200, 50, 65)
+
+    setStatus("Mengambil sofa...")
+
+    task.spawn(function()
+        local couch, err = getCouch()
+
+        if not running or token ~= thisToken then
+            return
+        end
+
+        if not couch then
+            stopFling(false)
+            setStatus(err or "Gagal mengambil sofa")
+            return
+        end
+
+        local equipped = pcall(function()
+            hum:EquipTool(couch)
+            task.wait(0.2)
+            couch:Activate()
+        end)
+
+        if not running or token ~= thisToken then
+            return
+        end
+
+        if not equipped then
+            stopFling(false)
+            setStatus("Gagal mengaktifkan sofa")
+            return
+        end
+
+        -- Coba interaksi dengan sofa
+        pcall(function()
+            local vim = game:GetService(
+                "VirtualInputManager"
+            )
+
+            vim:SendKeyEvent(
+                true,
+                Enum.KeyCode.F,
+                false,
+                game
+            )
+
+            vim:SendKeyEvent(
+                false,
+                Enum.KeyCode.F,
+                false,
+                game
+            )
+        end)
+
+        if not running or token ~= thisToken then
+            return
+        end
+
+        -- Dorongan fisika
+        local push = Instance.new("BodyVelocity")
+        push.Name = "XLORD_FlingPush"
+        push.MaxForce = Vector3.new(
+            200000,
+            100000,
+            200000
+        )
+        push.P = 12500
+        push.Velocity = Vector3.zero
+        push.Parent = root
+        pushForce = push
+
+        -- Rotasi fisika
+        local spin = Instance.new(
+            "BodyAngularVelocity"
+        )
+        spin.Name = "XLORD_FlingSpin"
+        spin.MaxTorque = Vector3.new(
+            1e8, 1e8, 1e8
+        )
+        spin.P = 50000
+        spin.AngularVelocity =
+            Vector3.new(0, 110, 0)
+        spin.Parent = root
+        spinForce = spin
+
+        setStatus(
+            "Fling aktif: @" .. target.Name
+        )
+
+        local beginTime = os.clock()
+        local maxDuration = 8
+
+        while running
+            and token == thisToken
+            and gui.Parent
+            and char.Parent
+            and target.Parent == Players do
+
+            local tr =
+                target.Character and
+                target.Character:FindFirstChild(
+                    "HumanoidRootPart"
+                )
+
+            local th =
+                target.Character and
+                target.Character:FindFirstChildOfClass(
+                    "Humanoid"
+                )
+
+            if not tr or not th or th.Health <= 0 then
+                break
+            end
+
+            if os.clock() - beginTime >= maxDuration then
+                break
+            end
+
+            local t = os.clock() - beginTime
+            local angle = t * 28
+            local radius = 1.3
+
+            local offset = Vector3.new(
+                math.cos(angle) * radius,
+                math.sin(angle * 3) * 0.8,
+                math.sin(angle) * radius
+            )
+
+            local destination =
+                tr.Position + offset
+
+            pcall(function()
+                root.CFrame = CFrame.new(
+                    destination,
+                    tr.Position
+                )
+
+                local direction =
+                    tr.Position - root.Position
+
+                if direction.Magnitude > 0.01 then
+                    push.Velocity =
+                        direction.Unit * 135
+                end
+
+                root.AssemblyAngularVelocity =
+                    Vector3.new(0, 110, 0)
+            end)
+
+            RunService.Heartbeat:Wait()
+        end
+
+        if token == thisToken then
+            stopFling(true)
+            setStatus("Sofa Fling selesai")
+        end
+    end)
+end
+
+--==========================================
+-- TELEPORT TO SELECTED PLAYER
+--==========================================
+
+local function teleportToSelected()
+    if not selected or selected.Parent ~= Players then
+        setStatus("Pilih pemain terlebih dahulu!")
+        return
+    end
+
+    if running then
+        stopFling(true)
+    end
+
+    local char = LP.Character
+    local tchar = selected.Character
+
+    local root =
+        char and char:FindFirstChild(
+            "HumanoidRootPart"
+        )
+
+    local troot =
+        tchar and tchar:FindFirstChild(
+            "HumanoidRootPart"
+        )
+
+    if not root or not troot then
+        setStatus("Karakter belum tersedia")
+        return
+    end
+
+    local hum =
+        char:FindFirstChildOfClass("Humanoid")
+
+    if hum then
+        hum.Sit = false
+    end
+
+    char:PivotTo(
+        troot.CFrame * CFrame.new(0, 0, 3)
+    )
+
+    setStatus(
+        "Teleport ke @" .. selected.Name
+    )
+end
+
+--==========================================
+-- UPDATE PLAYER LIST
+--==========================================
+
+local function updatePlayers()
+    if not gui.Parent then
+        return
+    end
+
+    for _, child in ipairs(scroll:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    local keyword = search.Text:lower()
+    local list = Players:GetPlayers()
+
+    table.sort(list, function(a, b)
+        return a.Name:lower() < b.Name:lower()
+    end)
+
+    local count = 0
+
+    for _, player in ipairs(list) do
+        if player ~= LP then
+            local name = player.Name:lower()
+            local display = player.DisplayName:lower()
+
+            local matches =
+                keyword == ""
+                or name:find(keyword, 1, true)
+                or display:find(keyword, 1, true)
+
+            if matches then
+                count = count + 1
+
+                local color =
+                    selected == player
+                    and Color3.fromRGB(45, 125, 95)
+                    or Color3.fromRGB(50, 54, 73)
+
+                local button = makeButton(
+                    scroll,
+                    "Player_" .. player.Name,
+                    player.DisplayName ..
+                    " (@" .. player.Name .. ")",
+                    UDim2.fromOffset(4, 0),
+                    UDim2.new(1, -8, 0, 38),
+                    color
+                )
+
+                button.LayoutOrder = count
+                button.TextSize = 12
+
+                button.MouseButton1Click:Connect(
+                    function()
+
+                        if running then
+                            stopFling(true)
+                        end
+
+                        selected = player
+
+                        selectedLabel.Text =
+                            "Target: @" .. player.Name
+
+                        setStatus("Target dipilih")
+
+                        updatePlayers()
+                    end
+                )
+            end
+        end
+    end
+
+    if count == 0 then
+        setStatus("Tidak ada pemain yang cocok")
+    end
+end
+
+--==========================================
+-- PLAYER & FUNCTION EVENTS
+--==========================================
+
+bind(refresh.MouseButton1Click:Connect(
+    updatePlayers
+))
+
+bind(
+    search:GetPropertyChangedSignal(
+        "Text"
+    ):Connect(updatePlayers)
+)
+
+bind(
+    tpButton.MouseButton1Click:Connect(
+        teleportToSelected
+    )
+)
+
+bind(flingButton.MouseButton1Click:Connect(
+    function()
+        if running then
+            stopFling(true)
+            setStatus("Sofa Fling dihentikan")
+        else
+            startFling()
+        end
+    end
+))
+
+bind(Players.PlayerAdded:Connect(
+    updatePlayers
+))
+
+bind(Players.PlayerRemoving:Connect(
+    function(player)
+        if selected == player then
+            if running then
+                stopFling(true)
+            end
+
+            selected = nil
+
+            selectedLabel.Text =
+                "Target: Belum dipilih"
+        end
+
+        task.defer(updatePlayers)
+    end
+))
+
+bind(LP.CharacterAdded:Connect(function()
+    if running then
+        stopFling(false)
+    end
+end))
+
+--==========================================
+-- GUI RESIZE BUTTON EVENTS
+--==========================================
+
+bind(shrink.MouseButton1Click:Connect(
+    function()
+        setScale(scale.Scale - 0.10)
+        setStatus(
+            "Ukuran GUI: " ..
+            math.floor(scale.Scale * 100 + 0.5) ..
+            "%"
+        )
+    end
+))
+
+bind(enlarge.MouseButton1Click:Connect(
+    function()
+        setScale(scale.Scale + 0.10)
+        setStatus(
+            "Ukuran GUI: " ..
+            math.floor(scale.Scale * 100 + 0.5) ..
+            "%"
+        )
+    end
+))
+
+-- Resize jika ukuran layar berubah
+local function watchCamera(camera)
+    if camera then
+        bind(
+            camera:GetPropertyChangedSignal(
+                "ViewportSize"
+            ):Connect(function()
+                if gui.Parent then
+                    setScale(scale.Scale)
+                end
+            end)
+        )
+    end
+end
+
+watchCamera(workspace.CurrentCamera)
+
+--==========================================
+-- MINIMIZE / RESTORE
+--==========================================
+
+bind(minimize.MouseButton1Click:Connect(
+    function()
+        main.Visible = false
+        floating.Visible = true
+    end
+))
+
+bind(floating.MouseButton1Click:Connect(
+    function()
+        floating.Visible = false
+        main.Visible = true
+    end
+))
+
+--==========================================
+-- CONFIRM CLOSE
+--==========================================
+
+local confirm = Instance.new("Frame")
+confirm.Name = "CloseConfirmation"
+confirm.Size = UDim2.fromScale(1, 1)
+confirm.Position = UDim2.fromScale(0, 0)
+confirm.BackgroundColor3 =
+    Color3.fromRGB(0, 0, 0)
+confirm.BackgroundTransparency = 0.15
+confirm.BorderSizePixel = 0
+confirm.Visible = false
+confirm.Active = true
+confirm.ZIndex = 20
+confirm.Parent = main
+
+corner(confirm, 12)
+
+local dialog = Instance.new("Frame")
+dialog.Name = "Dialog"
+dialog.Size = UDim2.fromOffset(280, 155)
+dialog.AnchorPoint = Vector2.new(0.5, 0.5)
+dialog.Position = UDim2.fromScale(0.5, 0.5)
+dialog.BackgroundColor3 =
+    Color3.fromRGB(35, 38, 55)
+dialog.BorderSizePixel = 0
+dialog.ZIndex = 21
+dialog.Parent = confirm
+
+corner(dialog, 12)
+
+local message = Instance.new("TextLabel")
+message.Size = UDim2.new(1, -20, 0, 75)
+message.Position = UDim2.fromOffset(10, 5)
+message.BackgroundTransparency = 1
+message.Text = "Yakin ingin menutup\nXLORD V4?"
+message.TextColor3 = Color3.new(1, 1, 1)
+message.TextSize = 16
+message.Font = Enum.Font.GothamBold
+message.TextWrapped = true
+message.ZIndex = 22
+message.Parent = dialog
+
+local yes = makeButton(
+    dialog,
+    "Yes",
+    "YA, TUTUP",
+    UDim2.fromOffset(15, 95),
+    UDim2.fromOffset(120, 40),
+    Color3.fromRGB(205, 55, 65)
+)
+yes.ZIndex = 22
+
+local no = makeButton(
+    dialog,
+    "No",
+    "BATAL",
+    UDim2.fromOffset(145, 95),
+    UDim2.fromOffset(120, 40),
+    Color3.fromRGB(55, 125, 225)
+)
+no.ZIndex = 22
+
+bind(close.MouseButton1Click:Connect(
+    function()
+        confirm.Visible = true
+    end
+))
+
+bind(no.MouseButton1Click:Connect(
+    function()
+        confirm.Visible = false
+    end
+))
+
+bind(yes.MouseButton1Click:Connect(
+    function()
+        gui:Destroy()
+    end
+))
+
+--==========================================
+-- DRAGGABLE GUI (PC & MOBILE)
+--==========================================
+
+local function makeDraggable(frame, handle)
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    local dragInput = nil
+
+    bind(handle.InputBegan:Connect(function(input)
+        if confirm.Visible then
+            return
+        end
+
+        if input.UserInputType ==
+            Enum.UserInputType.MouseButton1
+            or input.UserInputType ==
+            Enum.UserInputType.Touch then
+
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+
+            local ended
+            ended = input.Changed:Connect(function()
+                if input.UserInputState ==
+                    Enum.UserInputState.End then
+
+                    dragging = false
+                    ended:Disconnect()
+                end
+            end)
+        end
+    end))
+
+    bind(handle.InputChanged:Connect(function(input)
+        if input.UserInputType ==
+            Enum.UserInputType.MouseMovement
+            or input.UserInputType ==
+            Enum.UserInputType.Touch then
+
+            dragInput = input
+        end
+    end))
+
+    bind(UIS.InputChanged:Connect(function(input)
+        if not dragging
+            or input ~= dragInput
+            or not gui.Parent then
+            return
+        end
+
+        local delta = input.Position - dragStart
+
+        frame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end))
+end
+
+makeDraggable(main, header)
+makeDraggable(floating, floating)
+
+--==========================================
+-- CLEANUP ON GUI DESTROY
+--==========================================
+
+gui.Destroying:Connect(function()
+    stopFling(true)
+
+    for _, connection in ipairs(connections) do
+        if connection.Connected then
+            connection:Disconnect()
+        end
+    end
+
+    table.clear(connections)
+end)
+
+--==========================================
+-- INITIALIZE
+--==========================================
+
+updatePlayers()
+
+print("====================================")
+print("XLORD V4 - BROOKHAVEN RP")
+print("Teleport       : READY")
+print("Sofa Fling     : READY")
+print("Resize GUI     : ENABLED")
+print("Minimize GUI   : ENABLED")
+print("Floating Icon  : ENABLED")
+print("Drag GUI       : ENABLED")
+print("Confirm Close  : ENABLED")
+print("====================================")
