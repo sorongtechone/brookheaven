@@ -1,5 +1,5 @@
 --====================================================
--- XLORD HUB V16 | BROOKHAVEN RP
+-- XLORD HUB V17 | BROOKHAVEN RP
 -- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
@@ -78,7 +78,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V16"
+header.Text = "XLORD | V17"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -158,12 +158,12 @@ targetLabel.Parent = main
 
 local teleport = button(main, "Teleport", "TELEPORT TO PLAYER", COLORS.green)
 local fling = button(main, "SofaFling", "AUTO SOFA : START", COLORS.orange)
-local trampolineButton = button(main, "Trampoline", "AMBIL TRAMPOLINE MERAH", COLORS.purple)
+local trampolineButton = button(main, "Trampoline", "TRAMPOLINE DI BAWAH TARGET", COLORS.purple)
 
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V16 siap digunakan"
+status.Text = "XLORD V17 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -242,7 +242,7 @@ local function applySize(newWidth, newHeight)
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V16"
+    header.Text = width < 275 and "XLORD" or "XLORD | V17"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
@@ -308,17 +308,18 @@ watchCamera()
 local selectedPlayer
 
 --====================================================
--- TRAMPOLINE: STEP 1 - REQUEST THE REAL GAME ITEM AND EQUIP
--- Not a locally drawn replica. The exact server-side item key
--- is unverified: "Trampoline" is a best-effort candidate.
+-- TRAMPOLINE: EQUIP THE REAL TOOL AND TRY TO PLACE
+-- AT THE SELECTED PLAYER'S FEET WITH ONE CLICK.
+-- Brookhaven controls prop placement on the server:
+-- this is best effort, not a guaranteed remote spawn.
 --====================================================
-local trampolineRequestBusy = false
+local trampolineBusy = false
 
 local function isTrampolineTool(instance)
     if not instance or not instance:IsA("Tool") then return false end
-    local simpleName = instance.Name:lower():gsub("[%s_%-]", "")
-    return simpleName:find("trampoline", 1, true) ~= nil
-        or simpleName:find("trampolin", 1, true) ~= nil
+    local key = instance.Name:lower():gsub("[%s_%-]", "")
+    return key:find("trampoline", 1, true) ~= nil
+        or key:find("trampolin", 1, true) ~= nil
 end
 
 local function findOwnedTrampoline(character, backpack)
@@ -332,77 +333,160 @@ local function findOwnedTrampoline(character, backpack)
     return nil
 end
 
-local function takeRealTrampoline()
-    if trampolineRequestBusy then
-        setStatus("Masih mencoba mengambil trampoline...")
+local function getRealTrampoline(character, backpack)
+    local trampoline = findOwnedTrampoline(character, backpack)
+    if trampoline then return trampoline end
+
+    local re = ReplicatedStorage:FindFirstChild("RE")
+    local remote = re and re:FindFirstChild("1Too1l")
+    if remote and remote:IsA("RemoteFunction") then
+        setStatus("Meminta trampoline asli...")
+        local ok, err = pcall(function()
+            remote:InvokeServer("PickingTools", "Trampoline")
+        end)
+        if not ok then
+            warn("[XLORD V17] Trampoline request:", err)
+        end
+    end
+
+    for _ = 1, 24 do
+        if not gui.Parent or localPlayer.Character ~= character then
+            return nil
+        end
+        trampoline = findOwnedTrampoline(character, backpack)
+        if trampoline then return trampoline end
+        task.wait(0.1)
+    end
+    return nil
+end
+
+local function getTargetFootPoint(target)
+    local char = target and target.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not root or not hum or hum.Health <= 0 then return nil end
+
+    -- Nominal height of feet in world coordinates.
+    local feetY = root.Position.Y - hum.HipHeight - root.Size.Y / 2
+    return Vector3.new(root.Position.X, feetY - 0.35, root.Position.Z)
+end
+
+local function sendPlacementClick(point)
+    local camera = workspace.CurrentCamera
+    if not camera then return false, "Kamera tidak tersedia" end
+
+    local cameraType = camera.CameraType
+    local cameraCF = camera.CFrame
+    local cameraSubject = camera.CameraSubject
+    local wasMainVisible = main.Visible
+    local wasFloatingVisible = floating.Visible
+    main.Visible = false -- avoid intercepting click at screen center
+    floating.Visible = false
+    local view = camera.ViewportSize
+    local x, y = math.floor(view.X / 2), math.floor(view.Y / 2)
+
+    -- Temporarily point the camera at the target's feet so the
+    -- game's ordinary click-to-place interaction targets that spot.
+    -- It may be rejected when the target is out of placement range.
+    local successful, err = pcall(function()
+        camera.CameraType = Enum.CameraType.Scriptable
+        camera.CFrame = CFrame.lookAt(
+            point + Vector3.new(5, 5, 11),
+            point
+        )
+        RunService.RenderStepped:Wait()
+        RunService.RenderStepped:Wait()
+
+        -- Real input may be blocked by the executor/client.
+        local vim = game:GetService("VirtualInputManager")
+        vim:SendMouseMoveEvent(x, y, game)
+        task.wait(0.06)
+        vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
+        RunService.RenderStepped:Wait()
+        vim:SendMouseButtonEvent(x, y, 0, false, game, 0)
+        task.wait(0.12)
+    end)
+
+    -- Restore even if the input API failed.
+    pcall(function()
+        camera.CameraType = cameraType
+        camera.CameraSubject = cameraSubject
+        camera.CFrame = cameraCF
+    end)
+    main.Visible = wasMainVisible
+    floating.Visible = wasFloatingVisible
+    return successful, err
+end
+
+local function placeRealTrampoline()
+    if trampolineBusy then
+        setStatus("Penempatan trampoline sedang diproses")
         return
     end
-    trampolineRequestBusy = true
+    local target = selectedPlayer
+    local initialPoint = getTargetFootPoint(target)
+    if not target or target.Parent ~= Players or not initialPoint then
+        setStatus("Pilih target yang masih hidup dahulu")
+        return
+    end
+
+    trampolineBusy = true
     task.spawn(function()
         local character = localPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local backpack = localPlayer:FindFirstChildOfClass("Backpack")
         if not character or not humanoid or humanoid.Health <= 0 or not backpack then
-            setStatus("Karakter/Backpack belum siap")
-            trampolineRequestBusy = false
+            setStatus("Karakter atau Backpack belum siap")
+            trampolineBusy = false
             return
         end
 
-        local trampoline = findOwnedTrampoline(character, backpack)
-        if not trampoline then
-            local re = ReplicatedStorage:FindFirstChild("RE")
-            local remote = re and re:FindFirstChild("1Too1l")
-            if remote and remote:IsA("RemoteFunction") then
-                setStatus("Meminta item Trampoline ke game...")
-                local ok, message = pcall(function()
-                    remote:InvokeServer("PickingTools", "Trampoline")
-                end)
-                if not ok then
-                    warn("[XLORD V16] Permintaan Trampoline ditolak:", message)
-                end
-            else
-                warn("[XLORD V16] Remote pengambilan item tidak tersedia")
-            end
-
-            -- Give the inventory time to receive the requested item.
-            for _ = 1, 25 do
-                if not gui.Parent or localPlayer.Character ~= character then break end
-                trampoline = findOwnedTrampoline(character, backpack)
-                if trampoline then break end
-                task.wait(0.1)
-            end
-        end
-
-        if not gui.Parent then
-            trampolineRequestBusy = false
-            return
-        end
-        if not trampoline then
-            setStatus("Trampoline asli belum ditemukan. Pilih item merah dari inventory game, lalu tekan tombol lagi.")
-            print("[XLORD V16] Nama Tool di Backpack:")
-            for _, item in ipairs(backpack:GetChildren()) do
-                if item:IsA("Tool") then print(" -", item.Name) end
-            end
-            trampolineRequestBusy = false
+        local tool = getRealTrampoline(character, backpack)
+        if not gui.Parent then trampolineBusy = false; return end
+        if not tool then
+            setStatus("Trampoline merah tidak ditemukan. Ambil dari inventory dan coba lagi")
+            trampolineBusy = false
             return
         end
 
-        local ok, err = pcall(function()
-            humanoid:EquipTool(trampoline)
+        local ok, equipErr = pcall(function()
+            humanoid:EquipTool(tool)
         end)
-        task.wait(0.15)
-        if ok and trampoline.Parent == character then
-            setStatus("Trampoline asli di tangan: " .. trampoline.Name .. " | Belum ditempatkan")
-            print("[XLORD V16] Tool trampoline ditemukan:", trampoline:GetFullName())
-        else
-            setStatus("Trampoline ditemukan, tetapi gagal dipakai di tangan")
-            if not ok then warn("[XLORD V16] Equip error:", err) end
+        if not ok or tool.Parent ~= character then
+            setStatus("Tidak bisa memasang item trampoline di tangan")
+            if not ok then warn("[XLORD V17] Equip:", equipErr) end
+            trampolineBusy = false
+            return
         end
-        trampolineRequestBusy = false
+
+        local point = getTargetFootPoint(target)
+        if not point then
+            setStatus("Posisi target hilang sebelum trampoline dipasang")
+            trampolineBusy = false
+            return
+        end
+
+        setStatus(string.format(
+            "Mencoba meletakkan trampoline di X:%.1f Y:%.1f Z:%.1f",
+            point.X, point.Y, point.Z
+        ))
+
+        task.wait(0.12)
+        local clicked, why = sendPlacementClick(point)
+        if not clicked then
+            -- Avoid Tool:Activate() without an aimed cursor, which could
+            -- accidentally place the prop somewhere other than the target.
+            warn("[XLORD V17] Virtual placement click unavailable:", why)
+            setStatus("Klik otomatis tidak didukung; item masih bisa ditempatkan manual")
+        else
+            setStatus("Klik penempatan dikirim ke kaki @" .. target.Name .. "; cek apakah prop muncul")
+        end
+        print("[XLORD V17] Requested trampoline point:", point)
+        trampolineBusy = false
     end)
 end
 
-listen(trampolineButton.MouseButton1Click:Connect(takeRealTrampoline))
+listen(trampolineButton.MouseButton1Click:Connect(placeRealTrampoline))
 
 --====================================================
 -- LIVE MAP POSITION HUD (own character + selected target)
@@ -1022,7 +1106,7 @@ local prompt = Instance.new("TextLabel")
 prompt.Size = UDim2.new(1, -14, 0, 77)
 prompt.Position = UDim2.fromOffset(7, 6)
 prompt.BackgroundTransparency = 1
-prompt.Text = "Yakin ingin menutup\nXLORD V14?"
+prompt.Text = "Yakin ingin menutup\nXLORD V17?"
 prompt.TextColor3 = Color3.new(1, 1, 1)
 prompt.Font = Enum.Font.GothamBold
 prompt.TextSize = 15
@@ -1128,4 +1212,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V16] Loaded: Auto Sofa, Teleport, real Trampoline equip test, XYZ, resize, minimize")
+print("[XLORD V17] Loaded: Auto Sofa, Teleport, trampoline placement test, XYZ, resize, minimize")
