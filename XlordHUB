@@ -1,5 +1,5 @@
 --====================================================
--- XLORD HUB V14 | BROOKHAVEN RP
+-- XLORD HUB V15 | BROOKHAVEN RP
 -- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
@@ -44,6 +44,7 @@ local function button(parent, name, caption, color)
 end
 
 local COLORS = {
+    purple = Color3.fromRGB(119, 74, 190),
     panel = Color3.fromRGB(25, 27, 38),
     field = Color3.fromRGB(43, 46, 62),
     list = Color3.fromRGB(33, 36, 49),
@@ -67,7 +68,7 @@ local main = Instance.new("Frame")
 main.Name = "Main"
 main.AnchorPoint = Vector2.new(0.5, 0.5)
 main.Position = UDim2.fromScale(0.5, 0.5)
-main.Size = UDim2.fromOffset(320, 470)
+main.Size = UDim2.fromOffset(320, 490)
 main.BackgroundColor3 = COLORS.panel
 main.BorderSizePixel = 0
 main.Active = true
@@ -77,7 +78,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V14"
+header.Text = "XLORD | V15"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -157,11 +158,12 @@ targetLabel.Parent = main
 
 local teleport = button(main, "Teleport", "TELEPORT TO PLAYER", COLORS.green)
 local fling = button(main, "SofaFling", "AUTO SOFA : START", COLORS.orange)
+local trampolineButton = button(main, "Trampoline", "SPAWN TRAMPOLINE", COLORS.purple)
 
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V14 siap digunakan"
+status.Text = "XLORD V15 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -175,9 +177,9 @@ end
 --====================================================
 -- RESIZE: change real pixel dimensions, NOT UIScale.
 --====================================================
-local width, height = 320, 470
-local MIN_WIDTH, MIN_HEIGHT = 240, 345
-local MAX_WIDTH, MAX_HEIGHT = 420, 610
+local width, height = 320, 490
+local MIN_WIDTH, MIN_HEIGHT = 240, 365
+local MAX_WIDTH, MAX_HEIGHT = 420, 640
 local ROW_HEIGHT, ROW_GAP, LIST_PADDING = 38, 6, 6
 local listCount = 0
 local canvasRevision = 0
@@ -240,7 +242,7 @@ local function applySize(newWidth, newHeight)
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V14"
+    header.Text = width < 275 and "XLORD" or "XLORD | V15"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
@@ -255,7 +257,7 @@ local function applySize(newWidth, newHeight)
     refresh.Position = UDim2.fromOffset(10, 88)
     refresh.Size = UDim2.fromOffset(width - 20, 31)
 
-    local listHeight = math.max(35, height - 284)
+    local listHeight = math.max(35, height - 324)
     scroll.Position = UDim2.fromOffset(10, 125)
     scroll.Size = UDim2.fromOffset(width - 20, listHeight)
 
@@ -266,7 +268,9 @@ local function applySize(newWidth, newHeight)
     teleport.Size = UDim2.fromOffset(width - 20, 34)
     fling.Position = UDim2.fromOffset(10, targetY + 68)
     fling.Size = UDim2.fromOffset(width - 20, 34)
-    status.Position = UDim2.fromOffset(10, targetY + 108)
+    trampolineButton.Position = UDim2.fromOffset(10, targetY + 108)
+    trampolineButton.Size = UDim2.fromOffset(width - 20, 34)
+    status.Position = UDim2.fromOffset(10, targetY + 148)
     status.Size = UDim2.fromOffset(width - 20, 31)
 
     updateCanvas(false)
@@ -302,6 +306,109 @@ watchCamera()
 -- TELEPORT AND SOFA FLING
 --====================================================
 local selectedPlayer
+
+--====================================================
+-- TRAMPOLINE: LOCAL VISUAL PROP UNDER SELECTED PLAYER
+-- No spoofed server remote; other clients won't see this
+-- unless the game provides an authorized server-side prop.
+--====================================================
+local spawnedTrampoline = nil
+
+local function trampolinePart(parent, name, size, cf, color, collides)
+    local p = Instance.new("Part")
+    p.Name = name
+    p.Size = size
+    p.CFrame = cf
+    p.Anchored = true
+    p.CanCollide = collides or false
+    p.CanTouch = collides or false
+    p.Material = Enum.Material.SmoothPlastic
+    p.Color = color
+    p.TopSurface = Enum.SurfaceType.Smooth
+    p.BottomSurface = Enum.SurfaceType.Smooth
+    p.Parent = parent
+    return p
+end
+
+local function spawnTrampolineUnderTarget()
+    local player = selectedPlayer
+    if not player or player.Parent ~= Players then
+        setStatus("Pilih target terlebih dahulu")
+        return
+    end
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not root or not hum or hum.Health <= 0 then
+        setStatus("Target belum siap")
+        return
+    end
+
+    -- Standard R15/R6 foot approximation from HumanoidRootPart.
+    local feetY = root.Position.Y - root.Size.Y / 2 - hum.HipHeight
+    local basePosition = Vector3.new(root.Position.X, feetY - 0.25, root.Position.Z)
+
+    if spawnedTrampoline then
+        spawnedTrampoline:Destroy()
+        spawnedTrampoline = nil
+    end
+
+    local model = Instance.new("Model")
+    model.Name = "XLORD_LocalTrampoline"
+    model.Parent = workspace
+    spawnedTrampoline = model
+
+    -- Circular trampoline surface; cylinder axis is X, rotated to Y.
+    local mat = trampolinePart(
+        model, "JumpMat", Vector3.new(0.25, 8.2, 8.2),
+        CFrame.new(basePosition) * CFrame.Angles(0, 0, math.rad(90)),
+        Color3.fromRGB(30, 37, 60), true
+    )
+    mat.Shape = Enum.PartType.Cylinder
+    mat.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.15, 0.8, 100, 100)
+
+    local radius = 4.35
+    local segments = 18
+    for i = 1, segments do
+        local a0 = (i - 1) * math.pi * 2 / segments
+        local a1 = i * math.pi * 2 / segments
+        local p0 = basePosition + Vector3.new(math.cos(a0) * radius, 0, math.sin(a0) * radius)
+        local p1 = basePosition + Vector3.new(math.cos(a1) * radius, 0, math.sin(a1) * radius)
+        local mid = (p0 + p1) / 2
+        local piece = trampolinePart(
+            model, "SafetyRing", Vector3.new(0.3, 0.3, (p1 - p0).Magnitude + 0.03),
+            CFrame.lookAt(mid, p1), Color3.fromRGB(130, 85, 235), false
+        )
+        piece.Material = Enum.Material.Neon
+    end
+
+    for i = 1, 4 do
+        local a = (i - 1) * math.pi / 2 + math.pi / 4
+        local pos = basePosition + Vector3.new(math.cos(a)*3.7, -0.5, math.sin(a)*3.7)
+        local leg = trampolinePart(
+            model, "SupportLeg", Vector3.new(0.32, 1.05, 0.32),
+            CFrame.new(pos), Color3.fromRGB(120, 135, 155), false
+        )
+        leg.Material = Enum.Material.Metal
+    end
+
+    -- Only your own character can be bounced reliably by this local test.
+    mat.Touched:Connect(function(hit)
+        if not gui.Parent or spawnedTrampoline ~= model then return end
+        if not localPlayer.Character or not hit:IsDescendantOf(localPlayer.Character) then return end
+        local selfRoot = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local selfHum = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if selfRoot and selfHum and selfHum.Health > 0 then
+            local v = selfRoot.AssemblyLinearVelocity
+            selfRoot.AssemblyLinearVelocity = Vector3.new(v.X, math.max(v.Y, 75), v.Z)
+        end
+    end)
+
+    setStatus("Trampoline dibuat di bawah @" .. player.Name .. " (lokal)")
+end
+
+listen(trampolineButton.MouseButton1Click:Connect(spawnTrampolineUnderTarget))
+
 --====================================================
 -- LIVE MAP POSITION HUD (own character + selected target)
 -- Small top overlay, independent of the main window.
@@ -1017,6 +1124,7 @@ end))
 -- CLEANUP AND RUN
 --====================================================
 gui.Destroying:Connect(function()
+    if spawnedTrampoline then spawnedTrampoline:Destroy() end
     stopFling(true)
     if cameraConnection then cameraConnection:Disconnect() end
     for _, connection in ipairs(connections) do
@@ -1026,4 +1134,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V14] Loaded: Auto Sofa V11 behavior + local HP test, no manual TP, Teleport, XYZ, resize, minimize")
+print("[XLORD V15] Loaded: Auto Sofa, Teleport, local Trampoline, XYZ, resize, minimize")
