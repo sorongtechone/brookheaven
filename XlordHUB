@@ -1,6 +1,6 @@
 --====================================================
--- XLORD HUB V6 | BROOKHAVEN RP
--- Teleport, Downward Sofa Fling + Auto Return, Resize, Minimize, Close Confirm
+-- XLORD HUB V7 | BROOKHAVEN RP
+-- Teleport, Sideways Sofa Fling + Auto Return, Resize, Minimize, Close Confirm
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
 
@@ -77,7 +77,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V6"
+header.Text = "XLORD | V7"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -156,12 +156,12 @@ targetLabel.TextXAlignment = Enum.TextXAlignment.Left
 targetLabel.Parent = main
 
 local teleport = button(main, "Teleport", "TELEPORT TO PLAYER", COLORS.green)
-local fling = button(main, "SofaFling", "DOWN FLING : START", COLORS.orange)
+local fling = button(main, "SofaFling", "SIDE FLING : START", COLORS.orange)
 
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V6 siap digunakan"
+status.Text = "XLORD V7 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -240,7 +240,7 @@ local function applySize(newWidth, newHeight)
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V6"
+    header.Text = width < 275 and "XLORD" or "XLORD | V7"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
@@ -318,6 +318,8 @@ local function stopFling(restore)
     if restore and savedPivot and flingCharacter and flingCharacter.Parent
        and localPlayer.Character == flingCharacter then
         pcall(function()
+            local hum = flingCharacter:FindFirstChildOfClass("Humanoid")
+            if hum then hum.Sit = false end
             flingCharacter:PivotTo(savedPivot)
             local root = flingCharacter:FindFirstChild("HumanoidRootPart")
             if root then
@@ -329,7 +331,7 @@ local function stopFling(restore)
 
     savedPivot = nil
     flingCharacter = nil
-    fling.Text = "DOWN FLING : START"
+    fling.Text = "SIDE FLING : START"
     fling.BackgroundColor3 = COLORS.orange
 end
 
@@ -379,6 +381,25 @@ local function teleportToSelected()
     setStatus("Teleport ke @" .. selectedPlayer.Name)
 end
 
+-- Titik tengah map hanya pendekatan (koordinat Brookhaven bisa berubah).
+-- Menggunakan vektor menjauh dari titik ini untuk arah dorongan horizontal.
+local MAP_CENTER = Vector3.new(0, 0, 0)
+local SIDE_SPEED = 190
+local MAX_FLING_SECONDS = 3.0
+local PULSE_SECONDS = 0.28
+
+local function outwardDirection(targetRoot)
+    local pos = targetRoot.Position
+    local v = Vector3.new(pos.X - MAP_CENTER.X, 0, pos.Z - MAP_CENTER.Z)
+    if v.Magnitude < 8 then
+        -- Di dekat pusat, gunakan arah hadap target.
+        local look = targetRoot.CFrame.LookVector
+        v = Vector3.new(look.X, 0, look.Z)
+    end
+    if v.Magnitude < 0.01 then v = Vector3.new(1, 0, 0) end
+    return v.Unit
+end
+
 local function startFling()
     if flingRunning then return end
     local target = selectedPlayer
@@ -390,9 +411,9 @@ local function startFling()
     local character = localPlayer.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local theirs = target.Character
-    local theirRoot = theirs and theirs:FindFirstChild("HumanoidRootPart")
-    local theirHum = theirs and theirs:FindFirstChildOfClass("Humanoid")
+    local theirChar = target.Character
+    local theirRoot = theirChar and theirChar:FindFirstChild("HumanoidRootPart")
+    local theirHum = theirChar and theirChar:FindFirstChildOfClass("Humanoid")
 
     if not root or not humanoid or humanoid.Health <= 0
         or not theirRoot or not theirHum or theirHum.Health <= 0 then
@@ -400,16 +421,15 @@ local function startFling()
         return
     end
 
-    -- Simpan posisi asli sekali saja. Seluruh jalur stop selesai akan
-    -- mengembalikan karakter sendiri ke posisi ini, bukan ke posisi target.
+    -- Posisi asli disimpan sebelum mengaktifkan sofa/gerakan apa pun.
     flingRunning = true
     flingToken = flingToken + 1
     local myToken = flingToken
     flingCharacter = character
     savedPivot = character:GetPivot()
-    fling.Text = "DOWN FLING : STOP"
+    fling.Text = "SIDE FLING : STOP"
     fling.BackgroundColor3 = COLORS.red
-    setStatus("Mempersiapkan sofa dan posisi kembali...")
+    setStatus("Menyiapkan sofa dan posisi pulang...")
 
     task.spawn(function()
         local couch, err = getCouch()
@@ -420,19 +440,19 @@ local function startFling()
             return
         end
 
-        local success = pcall(function()
+        local equipped = pcall(function()
             humanoid:EquipTool(couch)
             task.wait(0.2)
             couch:Activate()
         end)
         if not flingRunning or myToken ~= flingToken then return end
-        if not success then
+        if not equipped then
             stopFling(true)
             setStatus("Sofa gagal diaktifkan")
             return
         end
 
-        -- Interaksi tambahan (tidak tersedia di semua versi game).
+        -- Interaksi tambahan yang mungkin tidak ada pada beberapa versi.
         pcall(function()
             local vim = game:GetService("VirtualInputManager")
             vim:SendKeyEvent(true, Enum.KeyCode.F, false, game)
@@ -440,74 +460,65 @@ local function startFling()
         end)
         if not flingRunning or myToken ~= flingToken then return end
 
-        -- Gaya vertikal diterapkan pada karakter KITA, bukan karakter target.
-        -- Target hanya bisa terpental jika terjadi tabrakan fisika yang
-        -- disinkronkan server; arahnya tidak dapat dipastikan dari klien.
+        -- Force hanya diterapkan ke karakter milik sendiri.
+        -- Target hanya terdorong bila collision direplikasi server.
         local push = Instance.new("BodyVelocity")
-        push.Name = "XLORD_DownwardPush"
-        push.MaxForce = Vector3.new(800000, 9000000, 800000)
+        push.Name = "XLORD_SidePush"
+        push.MaxForce = Vector3.new(900000, 450000, 900000)
         push.P = 60000
-        push.Velocity = Vector3.new(0, -190, 0)
+        push.Velocity = Vector3.zero
         push.Parent = root
         pushForce = push
 
         local spin = Instance.new("BodyAngularVelocity")
-        spin.Name = "XLORD_DownwardSpin"
+        spin.Name = "XLORD_SideSpin"
         spin.MaxTorque = Vector3.new(1e8, 1e8, 1e8)
         spin.P = 45000
-        spin.AngularVelocity = Vector3.new(0, 65, 0)
+        spin.AngularVelocity = Vector3.new(0, 85, 0)
         spin.Parent = root
         spinForce = spin
 
-        setStatus("Mencoba Down Fling ke @" .. target.Name)
+        setStatus("Mencoba Side Fling ke luar map: @" .. target.Name)
 
-        -- Dorong dari ATAS menuju BAWAH dengan pulsa singkat, lalu pulang.
-        -- Batasi durasi supaya karakter tidak tertinggal di bawah map.
-        local startTime = os.clock()
-        local maxDuration = 2.5
-        local interval = 0.24
+        local started = os.clock()
         local lastPulse = -1
 
         while flingRunning and myToken == flingToken and gui.Parent
             and target.Parent == Players and character.Parent
             and localPlayer.Character == character
-            and os.clock() - startTime < maxDuration do
+            and os.clock() - started < MAX_FLING_SECONDS do
 
-            local tChar = target.Character
-            local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
-            local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
-            if not tRoot or not tHum or tHum.Health <= 0
-                or humanoid.Health <= 0 then
-                break
-            end
+            local newChar = target.Character
+            local newRoot = newChar and newChar:FindFirstChild("HumanoidRootPart")
+            local newHum = newChar and newChar:FindFirstChildOfClass("Humanoid")
+            if not newRoot or not newHum or newHum.Health <= 0
+                or humanoid.Health <= 0 then break end
 
-            local elapsed = os.clock() - startTime
-            local pulse = math.floor(elapsed / interval)
+            local direction = outwardDirection(newRoot)
+            local pulse = math.floor((os.clock() - started) / PULSE_SECONDS)
+
             if pulse ~= lastPulse then
                 lastPulse = pulse
-                -- Reposisi di atas target, kemudian percepat ke bawah.
-                -- Sedikit variasi lateral agar tidak selalu tepat di tengah.
-                local x = ((pulse % 3) - 1) * 0.45
-                local z = ((pulse % 2) * 2 - 1) * 0.35
-                pcall(function()
-                    root.CFrame = CFrame.new(
-                        tRoot.Position + Vector3.new(x, 4.0, z),
-                        tRoot.Position
-                    )
-                    root.AssemblyLinearVelocity = Vector3.new(0, -190, 0)
-                    root.AssemblyAngularVelocity = Vector3.new(0, 65, 0)
-                end)
-            end
+                -- Dekat dari sisi dalam map, lalu bergerak ke sisi luar.
+                -- Tidak memaksa target ke bawah tanah.
+                local approach = newRoot.Position - direction * 3.4
+                    + Vector3.new(0, 0.6, 0)
+                local sideVelocity = direction * SIDE_SPEED
+                    + Vector3.new(0, 12, 0)
 
-            if push.Parent then
-                push.Velocity = Vector3.new(0, -190, 0)
+                pcall(function()
+                    root.CFrame = CFrame.new(approach, approach + direction)
+                    root.AssemblyLinearVelocity = sideVelocity
+                    root.AssemblyAngularVelocity = Vector3.new(0, 85, 0)
+                    push.Velocity = sideVelocity
+                end)
             end
             RunService.Heartbeat:Wait()
         end
 
         if myToken == flingToken then
             stopFling(true)
-            setStatus("Down Fling selesai; kembali ke posisi awal")
+            setStatus("Side Fling selesai; kembali ke posisi awal")
         end
     end)
 end
@@ -616,7 +627,7 @@ local prompt = Instance.new("TextLabel")
 prompt.Size = UDim2.new(1, -14, 0, 77)
 prompt.Position = UDim2.fromOffset(7, 6)
 prompt.BackgroundTransparency = 1
-prompt.Text = "Yakin ingin menutup\nXLORD V6?"
+prompt.Text = "Yakin ingin menutup\nXLORD V7?"
 prompt.TextColor3 = Color3.new(1, 1, 1)
 prompt.Font = Enum.Font.GothamBold
 prompt.TextSize = 15
@@ -722,4 +733,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V6] Loaded: no UIScale, scroll fixed, resize + minimize")
+print("[XLORD V7] Loaded: sideways fling, auto return, scroll fixed, resize + minimize")
