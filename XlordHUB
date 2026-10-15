@@ -1,8 +1,4 @@
---====================================================
--- XLORD HUB V7 | BROOKHAVEN RP
--- Teleport, Sideways Sofa Fling + Auto Return, Resize, Minimize, Close Confirm
--- Scroll fix: no UIScale; explicit content height
---====================================================
+
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
