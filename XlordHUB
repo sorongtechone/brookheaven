@@ -1,8 +1,3 @@
---====================================================
--- XLORD HUB V13 baaru | BROOKHAVEN RP
--- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
--- Scroll fix: no UIScale; explicit content height
---====================================================
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
