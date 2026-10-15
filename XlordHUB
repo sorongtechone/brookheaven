@@ -1,5 +1,5 @@
 --====================================================
--- XLORD HUB V20 | BROOKHAVEN RP
+-- XLORD HUB V21 | BROOKHAVEN RP
 -- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
@@ -78,7 +78,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V20"
+header.Text = "XLORD | V21"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -158,12 +158,12 @@ targetLabel.Parent = main
 
 local teleport = button(main, "Teleport", "TELEPORT TO PLAYER", COLORS.green)
 local fling = button(main, "SofaFling", "AUTO SOFA : START", COLORS.orange)
-local trampolineButton = button(main, "Trampoline", "SPAWN TRAMPOLINE MERAH", Color3.fromRGB(191, 45, 54))
+local trampolineButton = button(main, "Trampoline", "TRAMPOLINE ASLI (TEST)", Color3.fromRGB(191, 45, 54))
 
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V19 siap digunakan"
+status.Text = "XLORD V21 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -242,7 +242,7 @@ local function applySize(newWidth, newHeight)
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V20"
+    header.Text = width < 275 and "XLORD" or "XLORD | V21"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
@@ -308,136 +308,153 @@ watchCamera()
 local selectedPlayer
 
 --====================================================
--- TRAMPOLINE V20: RED, V15 DIRECT UNDER-TARGET PLACEMENT
--- No camera rotation, mouse events, remote guesses, or character TP.
--- The trampoline is a LOCAL VISUAL; it is not a server prop.
+-- V21: GENUINE BROOKHAVEN TRAMPOLINE TOOL EXPERIMENT
+-- NO visual clone, NO VirtualInputManager, NO mouse click.
+-- The Tool is fetched from the game; Tool:Activate is attempted
+-- near the chosen target. Exact SERVER placement is unverified.
 --====================================================
-local trampolinePreview = nil
-local RED = Color3.fromRGB(230, 38, 48)
-local DARK_MAT = Color3.fromRGB(29, 31, 36)
-local METAL = Color3.fromRGB(108, 115, 125)
-local TRAMPOLINE_HEIGHT_OFFSET = 0.75 -- higher than V15 by one stud
+local trampolinePreview = nil -- keep cleanup in the shared GUI compatible
+local trampolineBusy = false
 
-local function trampolinePart(parent, name, size, cf, color, collides)
-    local part = Instance.new("Part")
-    part.Name = name
-    part.Size = size
-    part.CFrame = cf
-    part.Anchored = true
-    part.CanCollide = collides == true
-    part.CanTouch = collides == true
-    part.CanQuery = false
-    part.Material = Enum.Material.SmoothPlastic
-    part.Color = color
-    part.TopSurface = Enum.SurfaceType.Smooth
-    part.BottomSurface = Enum.SurfaceType.Smooth
-    part.Parent = parent
-    return part
+local function isGenuineTrampoline(obj)
+    if not obj or not obj:IsA("Tool") then return false end
+    local n = obj.Name:lower():gsub("[%s_%-]", "")
+    return n:find("trampoline", 1, true) ~= nil
+        or n:find("trampolin", 1, true) ~= nil
 end
 
-local function spawnRedTrampolineUnderTarget()
+local function findTrampoline(char, backpack)
+    for _, container in ipairs({char, backpack}) do
+        if container then
+            for _, obj in ipairs(container:GetChildren()) do
+                if isGenuineTrampoline(obj) then return obj end
+            end
+        end
+    end
+    return nil
+end
+
+local function fetchTrampoline(char, backpack)
+    local tool = findTrampoline(char, backpack)
+    if tool then return tool end
+    local re = ReplicatedStorage:FindFirstChild("RE")
+    local pickup = re and re:FindFirstChild("1Too1l")
+    if not pickup or not pickup:IsA("RemoteFunction") then
+        return nil, "Remote pengambilan item tidak tersedia"
+    end
+    setStatus("Mengambil trampoline merah asli...")
+    local ok, err = pcall(function()
+        pickup:InvokeServer("PickingTools", "Trampoline")
+    end)
+    if not ok then
+        return nil, "Pickup ditolak: " .. tostring(err)
+    end
+    for _ = 1, 25 do
+        if not gui.Parent or localPlayer.Character ~= char then break end
+        tool = findTrampoline(char, backpack)
+        if tool then return tool end
+        task.wait(0.1)
+    end
+    return nil, "Item trampoline asli belum masuk Backpack"
+end
+
+local function useGenuineTrampolineNearTarget()
+    if trampolineBusy then
+        setStatus("Proses trampoline masih berjalan")
+        return
+    end
     local target = selectedPlayer
     if not target or target.Parent ~= Players then
         setStatus("Pilih target terlebih dahulu")
         return
     end
-
-    local character = target.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    if not root or not humanoid or humanoid.Health <= 0 then
-        setStatus("Target belum siap")
+    local targetChar = target.Character
+    local tRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+    if not tRoot or not targetHum or targetHum.Health <= 0 then
+        setStatus("Target tidak siap")
         return
     end
 
-    -- Exactly the same target-foot calculation as the working V15.
-    local feetY = root.Position.Y - root.Size.Y / 2 - humanoid.HipHeight
-    local center = Vector3.new(
-        root.Position.X,
-        feetY + TRAMPOLINE_HEIGHT_OFFSET,
-        root.Position.Z
-    )
-
-    if trampolinePreview then
-        trampolinePreview:Destroy()
-        trampolinePreview = nil
-    end
-
-    local model = Instance.new("Model")
-    model.Name = "XLORD_RedTrampoline_Local"
-    model.Parent = workspace
-    trampolinePreview = model
-
-    -- Dark surface surrounded by the bright red safety ring.
-    local mat = trampolinePart(
-        model,
-        "JumpMat",
-        Vector3.new(0.25, 8.2, 8.2),
-        CFrame.new(center) * CFrame.Angles(0, 0, math.rad(90)),
-        DARK_MAT,
-        true
-    )
-    mat.Shape = Enum.PartType.Cylinder
-    mat.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.15, 0.8, 100, 100)
-
-    local radius = 4.35
-    local segments = 18
-    for i = 1, segments do
-        local first = (i - 1) * math.pi * 2 / segments
-        local second = i * math.pi * 2 / segments
-        local p1 = center + Vector3.new(math.cos(first) * radius, 0, math.sin(first) * radius)
-        local p2 = center + Vector3.new(math.cos(second) * radius, 0, math.sin(second) * radius)
-        local mid = (p1 + p2) / 2
-        local ring = trampolinePart(
-            model,
-            "RedSafetyRing",
-            Vector3.new(0.32, 0.32, (p2 - p1).Magnitude + 0.03),
-            CFrame.lookAt(mid, p2),
-            RED,
-            false
-        )
-        ring.Material = Enum.Material.Neon
-    end
-
-    for i = 1, 4 do
-        local angle = (i - 1) * math.pi / 2 + math.pi / 4
-        local position = center + Vector3.new(
-            math.cos(angle) * 3.7,
-            -0.55,
-            math.sin(angle) * 3.7
-        )
-        local leg = trampolinePart(
-            model,
-            "SupportLeg",
-            Vector3.new(0.32, 1.05, 0.32),
-            CFrame.new(position),
-            METAL,
-            false
-        )
-        leg.Material = Enum.Material.Metal
-    end
-
-    -- Client-side demonstration only; cannot fling/bounce remote players.
-    mat.Touched:Connect(function(hit)
-        if not gui.Parent or trampolinePreview ~= model then return end
-        local ownCharacter = localPlayer.Character
-        if not ownCharacter or not hit:IsDescendantOf(ownCharacter) then return end
-        local ownRoot = ownCharacter:FindFirstChild("HumanoidRootPart")
-        local ownHum = ownCharacter:FindFirstChildOfClass("Humanoid")
-        if ownRoot and ownHum and ownHum.Health > 0 then
-            local velocity = ownRoot.AssemblyLinearVelocity
-            ownRoot.AssemblyLinearVelocity = Vector3.new(
-                velocity.X, math.max(velocity.Y, 75), velocity.Z
-            )
+    trampolineBusy = true
+    task.spawn(function()
+        local char = localPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local backpack = localPlayer:FindFirstChildOfClass("Backpack")
+        if not char or not hum or hum.Health <= 0 or not root or not backpack then
+            setStatus("Karakter sendiri belum siap")
+            trampolineBusy = false
+            return
         end
-    end)
 
-    setStatus(string.format(
-        "Trampoline MERAH di bawah @%s (lokal)", target.Name
-    ))
+        local tool, message = fetchTrampoline(char, backpack)
+        if not tool then
+            setStatus(message or "Trampoline asli tidak ditemukan")
+            trampolineBusy = false
+            return
+        end
+
+        local home = char:GetPivot()
+        local activated = false
+        local activatedConn = tool.Activated:Connect(function()
+            activated = true
+        end)
+        local ok, err = pcall(function()
+            hum.Sit = false
+            hum:EquipTool(tool)
+            task.wait(0.1)
+            if tool.Parent ~= char then
+                error("Trampoline gagal dipasang ke tangan")
+            end
+            -- Approach the target from a small distance, facing their feet.
+            -- Assumes placement may occur in front of the character.
+            -- This is an experiment, not a verified server placement API.
+            local fresh = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+            if not fresh then error("Target sudah berpindah/hilang") end
+            local facing = fresh.CFrame.LookVector
+            local nearPos = fresh.Position - facing * 3.0
+            local placeFrom = Vector3.new(nearPos.X, fresh.Position.Y, nearPos.Z)
+            char:PivotTo(CFrame.lookAt(placeFrom, fresh.Position))
+            RunService.Heartbeat:Wait()
+            if char.Parent and tool.Parent == char then
+                tool:Activate() -- programmatic Tool activation, not a mouse click
+                task.wait(0.18)
+                tool:Deactivate()
+            end
+        end)
+        -- Always try to restore the own avatar, even after an error.
+        pcall(function()
+            if char.Parent and localPlayer.Character == char then
+                hum:UnequipTools()
+                char:PivotTo(home)
+                local r = char:FindFirstChild("HumanoidRootPart")
+                if r then
+                    r.AssemblyLinearVelocity = Vector3.zero
+                    r.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
+        end)
+        activatedConn:Disconnect()
+        if not gui.Parent then
+            trampolineBusy = false
+            return
+        end
+        if not ok then
+            setStatus("Trampoline gagal: " .. tostring(err):sub(1, 80))
+        elseif activated then
+            setStatus("Item asli diaktifkan dekat @" .. target.Name .. "; cek hasil server")
+        else
+            setStatus("Item dipegang, tetapi aktivasi tidak terdeteksi")
+        end
+        print("[XLORD V21] Tool asli:", tool.Name,
+            "Aktivasi:", activated, "OK:", ok,
+            "Target:", target.Name, "Error:", err)
+        trampolineBusy = false
+    end)
 end
 
-listen(trampolineButton.MouseButton1Click:Connect(spawnRedTrampolineUnderTarget))
+listen(trampolineButton.MouseButton1Click:Connect(useGenuineTrampolineNearTarget))
 
 --====================================================
 -- LIVE MAP POSITION HUD (own character + selected target)
@@ -1164,4 +1181,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V20] Loaded: Auto Sofa, Teleport, red under-target trampoline, XYZ, resize, minimize")
+print("[XLORD V21] Loaded: Auto Sofa, Teleport, genuine server trampoline activation TEST, XYZ, resize, minimize")
