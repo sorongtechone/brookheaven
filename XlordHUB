@@ -1,6 +1,6 @@
 --====================================================
--- XLORD HUB V12 | BROOKHAVEN RP
--- Teleport, One-Click Auto Couch TP + Instant Rescue, XYZ, Resize, Minimize
+-- XLORD HUB V13 | BROOKHAVEN RP
+-- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
 
@@ -77,7 +77,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V12"
+header.Text = "XLORD | V13"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -161,7 +161,7 @@ local fling = button(main, "SofaFling", "AUTO SOFA : START", COLORS.orange)
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V12 siap digunakan"
+status.Text = "XLORD V13 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -240,7 +240,7 @@ local function applySize(newWidth, newHeight)
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V12"
+    header.Text = width < 275 and "XLORD" or "XLORD | V13"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
@@ -426,50 +426,6 @@ local function releaseOwnCouch()
     activeCouchTool = nil
 end
 
--- Pemulihan seketika tanpa task.wait(). Perlu dipanggil pada
--- frame yang sama dengan teleport sofa agar avatar tidak sempat
--- diproses di bawah batas void (FallenPartsDestroyHeight).
-local function restoreOwnCharacterNow(character, pivot)
-    if not character or not pivot or not character.Parent
-        or localPlayer.Character ~= character then
-        return false
-    end
-    return pcall(function()
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if humanoid and humanoid.Health > 0 then
-            humanoid.Sit = false
-        end
-        character:PivotTo(pivot)
-        local root = character:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.AssemblyAngularVelocity = Vector3.zero
-        end
-    end)
-end
-
--- Pengaman setelah teleport: apabila weld/grip sempat menyeret avatar
--- kembali, ulangi pemulihan dalam beberapa frame. Ini tidak bisa
--- membatalkan kematian yang sudah diproses server.
-local function watchOwnReturn(character, pivot)
-    if not character or not pivot then return end
-    task.spawn(function()
-        for _ = 1, 15 do
-            if not gui.Parent or localPlayer.Character ~= character
-                or not character.Parent then break end
-            local root = character:FindFirstChild("HumanoidRootPart")
-            local hum = character:FindFirstChildOfClass("Humanoid")
-            if not root or not hum or hum.Health <= 0 then break end
-
-            -- Jauhnya dari posisi aman, bukan tinggi absolut map.
-            if (root.Position - pivot.Position).Magnitude > 18 then
-                restoreOwnCharacterNow(character, pivot)
-            end
-            task.wait(0.05)
-        end
-    end)
-end
-
 local function stopFling(restore)
     -- Mematikan token membuat task yang masih menunggu langsung tidak valid.
     flingToken = flingToken + 1
@@ -480,8 +436,18 @@ local function stopFling(restore)
     -- Penting: lepaskan sofa SEBELUM memulihkan posisi pemain.
     releaseOwnCouch()
 
-    if restore then
-        restoreOwnCharacterNow(flingCharacter, savedPivot)
+    if restore and savedPivot and flingCharacter and flingCharacter.Parent
+       and localPlayer.Character == flingCharacter then
+        pcall(function()
+            local humanoid = flingCharacter:FindFirstChildOfClass("Humanoid")
+            if humanoid then humanoid.Sit = false end
+            flingCharacter:PivotTo(savedPivot)
+            local root = flingCharacter:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+            end
+        end)
     end
 
     savedPivot = nil
@@ -605,10 +571,71 @@ local function autoMoveSeatAndThrow(target, seat)
         seat:ApplyImpulse(velocity * seat.AssemblyMass)
     end)
     if not okThrow then
-        warn("[XLORD V12] Impulse gagal:", tostring(errThrow))
+        warn("[XLORD V13] Impulse gagal:", tostring(errThrow))
     end
     return true, string.format("Seat TP ke Y=%d dari Y=%.0f; throw=%s",
         AUTO_VOID_Y, beforeY, okThrow and "dicoba" or "gagal")
+end
+
+--====================================================
+-- OWN HP RECOVERY TEST (CLIENT ONLY)
+-- Server Roblox tetap yang menentukan HP sebenarnya.
+-- Ini HANYA tes nilai lokal; perubahan bisa ditolak/ditimpa
+-- server dan tidak bisa membangkitkan karakter yang sudah mati.
+--====================================================
+local function tryRestoreOwnHP(character)
+    if not character or localPlayer.Character ~= character then return end
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then
+        setStatus("Karakter mati: HP tidak bisa dipulihkan dari client. Tunggu respawn.")
+        return
+    end
+    local priorHP = hum.Health
+    local maxHP = hum.MaxHealth
+    if priorHP >= maxHP then
+        setStatus("AUTO selesai | HP sudah penuh: " .. math.floor(priorHP))
+        return
+    end
+    local ok = pcall(function()
+        hum.Health = maxHP
+    end)
+    if not ok then
+        setStatus("AUTO selesai | Client tidak bisa mengubah HP")
+        return
+    end
+    -- Baca ulang: perubahan di sini hanya nilai lokal, bukan bukti server setuju.
+    setStatus(string.format("AUTO selesai | Tes HP lokal %.0f -> %.0f (cek server)", priorHP, hum.Health))
+    task.delay(1, function()
+        if not gui.Parent or localPlayer.Character ~= character then return end
+        local latest = character:FindFirstChildOfClass("Humanoid")
+        if not latest then return end
+        local suffix = latest.Health < maxHP - 0.5
+            and "HP berubah lagi: server/game membatasi heal"
+            or "HP terlihat penuh di client, belum tentu server"
+        setStatus(string.format("%s | HP %.0f/%.0f", suffix, latest.Health, latest.MaxHealth))
+    end)
+end
+
+-- Jika auto sofa membuat karakter mati, biarkan server me-respawn
+-- lalu coba pulihkan POSISI ke tempat awal. Respawn game normal
+-- biasanya menghasilkan HP penuh; bukan heal instan oleh Delta.
+local lastSafeRespawnPivot = nil
+local lastAutoTimestamp = -1000
+local pendingRespawnPivot = nil
+
+local function watchCharacterDeath(character)
+    task.spawn(function()
+        local hum = character:FindFirstChildOfClass("Humanoid")
+            or character:WaitForChild("Humanoid", 10)
+        if not hum or not gui.Parent then return end
+        listen(hum.Died:Connect(function()
+            if lastSafeRespawnPivot
+                and os.clock() - lastAutoTimestamp < 14 then
+                pendingRespawnPivot = lastSafeRespawnPivot
+                setStatus("HP = 0. Tunggu respawn normal, coba kembali ke posisi awal...")
+            end
+        end))
+    end)
 end
 
 local function startFling()
@@ -633,6 +660,8 @@ local function startFling()
     local myToken = flingToken
     flingCharacter = character
     savedPivot = character:GetPivot()
+    lastSafeRespawnPivot = savedPivot
+    lastAutoTimestamp = os.clock()
     fling.Text = "AUTO SOFA : STOP"
     fling.BackgroundColor3 = COLORS.red
 
@@ -733,32 +762,30 @@ local function startFling()
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
 
-        -- Simpan ulang fallback aman sebelum sofa berpindah.
-        local returnPivot = savedPivot
-        setStatus("Target duduk! TP sofa -> lepas -> kembali seketika...")
-
-        -- Semua tindakan di bawah dieksekusi pada frame yang sama:
-        -- JANGAN task.wait() antara TP ke -550 dan pemulihan diri.
-        local called, okMove, result = pcall(autoMoveSeatAndThrow, target, seat)
-        local wasCurrent = isCurrent()
-        -- stopFling: hapus gaya, unequip Couch, PivotTo posisi aman.
-        -- Dilakukan TANPA jeda, bahkan bila teleport/throw error.
-        stopFling(true)
-        restoreOwnCharacterNow(character, returnPivot)
-        watchOwnReturn(character, returnPivot)
-
-        if not wasCurrent then return end
-        if not called then
-            setStatus("Auto gagal, karakter dipulihkan: " .. tostring(okMove):sub(1, 65))
-            return
-        end
+        setStatus("Target duduk! Teleport sofa ke Y=-550...")
+        local okMove, result = autoMoveSeatAndThrow(target, seat)
+        if not isCurrent() then return end
         if not okMove then
-            setStatus("TP sofa gagal, karakter dipulihkan: " .. tostring(result))
+            stopFling(true)
+            setStatus(result)
             return
         end
+
+        -- Rollback ke V11: beri waktu pendek untuk fisika target.
+        task.wait(0.18)
+        if not isCurrent() then return end
+        setStatus("Teleport selesai. Melepas sofa...")
+        releaseOwnCouch()
+        task.wait(0.08)
+        if not isCurrent() then return end
+
+        -- Auto return seperti V11, lalu uji pemulihan HP diri sendiri.
+        stopFling(true)
         setStatus("AUTO selesai: " .. result .. " | Sofa lepas, kamu kembali")
-        print("[XLORD V12] AUTO:", result)
-        print("[XLORD V12] Posisi target di client tidak menjamin posisi server")
+        lastAutoTimestamp = os.clock()
+        tryRestoreOwnHP(character)
+        print("[XLORD V13] AUTO:", result)
+        print("[XLORD V13] HP dari client tidak menjamin server menerima heal")
     end)
 end
 
@@ -775,9 +802,26 @@ listen(fling.MouseButton1Click:Connect(function()
         startFling()
     end
 end))
-listen(localPlayer.CharacterAdded:Connect(function()
+listen(localPlayer.CharacterAdded:Connect(function(newCharacter)
     if flingRunning then stopFling(false) end
+    watchCharacterDeath(newCharacter)
+    local destination = pendingRespawnPivot
+    pendingRespawnPivot = nil
+    if destination then
+        task.spawn(function()
+            local root = newCharacter:WaitForChild("HumanoidRootPart", 10)
+            local hum = newCharacter:WaitForChild("Humanoid", 10)
+            if not root or not hum or not gui.Parent then return end
+            task.wait(0.2)
+            if localPlayer.Character ~= newCharacter or hum.Health <= 0 then return end
+            local ok = pcall(function() newCharacter:PivotTo(destination) end)
+            if ok then
+                setStatus(string.format("Respawn selesai. HP: %.0f/%.0f | Kembali dicoba", hum.Health, hum.MaxHealth))
+            end
+        end)
+    end
 end))
+if localPlayer.Character then watchCharacterDeath(localPlayer.Character) end
 
 --====================================================
 -- PLAYER LIST: update once after row changes.
@@ -870,7 +914,7 @@ local prompt = Instance.new("TextLabel")
 prompt.Size = UDim2.new(1, -14, 0, 77)
 prompt.Position = UDim2.fromOffset(7, 6)
 prompt.BackgroundTransparency = 1
-prompt.Text = "Yakin ingin menutup\nXLORD V12?"
+prompt.Text = "Yakin ingin menutup\nXLORD V13?"
 prompt.TextColor3 = Color3.new(1, 1, 1)
 prompt.Font = Enum.Font.GothamBold
 prompt.TextSize = 15
@@ -976,4 +1020,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V12] Loaded: Auto Sofa + immediate own rescue, Teleport, XYZ, resize, minimize")
+print("[XLORD V13] Loaded: Auto Sofa V11 behavior + local HP test, no manual TP, Teleport, XYZ, resize, minimize")
