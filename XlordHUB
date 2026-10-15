@@ -1,6 +1,6 @@
 --====================================================
--- XLORD HUB V11 | BROOKHAVEN RP
--- Teleport, One-Click Auto Couch TP + Release + Return, XYZ, Resize, Minimize
+-- XLORD HUB V12 | BROOKHAVEN RP
+-- Teleport, One-Click Auto Couch TP + Instant Rescue, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
 
@@ -77,7 +77,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V11"
+header.Text = "XLORD | V12"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -157,12 +157,11 @@ targetLabel.Parent = main
 
 local teleport = button(main, "Teleport", "TELEPORT TO PLAYER", COLORS.green)
 local fling = button(main, "SofaFling", "AUTO SOFA : START", COLORS.orange)
-local couchTeleport = button(main, "CouchTeleportTest", "MANUAL COUCH TP -550", COLORS.blue)
 
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V11 siap digunakan"
+status.Text = "XLORD V12 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -241,7 +240,7 @@ local function applySize(newWidth, newHeight)
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V11"
+    header.Text = width < 275 and "XLORD" or "XLORD | V12"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
@@ -256,7 +255,7 @@ local function applySize(newWidth, newHeight)
     refresh.Position = UDim2.fromOffset(10, 88)
     refresh.Size = UDim2.fromOffset(width - 20, 31)
 
-    local listHeight = math.max(35, height - 324)
+    local listHeight = math.max(35, height - 284)
     scroll.Position = UDim2.fromOffset(10, 125)
     scroll.Size = UDim2.fromOffset(width - 20, listHeight)
 
@@ -267,9 +266,7 @@ local function applySize(newWidth, newHeight)
     teleport.Size = UDim2.fromOffset(width - 20, 34)
     fling.Position = UDim2.fromOffset(10, targetY + 68)
     fling.Size = UDim2.fromOffset(width - 20, 34)
-    couchTeleport.Position = UDim2.fromOffset(10, targetY + 108)
-    couchTeleport.Size = UDim2.fromOffset(width - 20, 34)
-    status.Position = UDim2.fromOffset(10, targetY + 148)
+    status.Position = UDim2.fromOffset(10, targetY + 108)
     status.Size = UDim2.fromOffset(width - 20, 31)
 
     updateCanvas(false)
@@ -429,6 +426,50 @@ local function releaseOwnCouch()
     activeCouchTool = nil
 end
 
+-- Pemulihan seketika tanpa task.wait(). Perlu dipanggil pada
+-- frame yang sama dengan teleport sofa agar avatar tidak sempat
+-- diproses di bawah batas void (FallenPartsDestroyHeight).
+local function restoreOwnCharacterNow(character, pivot)
+    if not character or not pivot or not character.Parent
+        or localPlayer.Character ~= character then
+        return false
+    end
+    return pcall(function()
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid and humanoid.Health > 0 then
+            humanoid.Sit = false
+        end
+        character:PivotTo(pivot)
+        local root = character:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+        end
+    end)
+end
+
+-- Pengaman setelah teleport: apabila weld/grip sempat menyeret avatar
+-- kembali, ulangi pemulihan dalam beberapa frame. Ini tidak bisa
+-- membatalkan kematian yang sudah diproses server.
+local function watchOwnReturn(character, pivot)
+    if not character or not pivot then return end
+    task.spawn(function()
+        for _ = 1, 15 do
+            if not gui.Parent or localPlayer.Character ~= character
+                or not character.Parent then break end
+            local root = character:FindFirstChild("HumanoidRootPart")
+            local hum = character:FindFirstChildOfClass("Humanoid")
+            if not root or not hum or hum.Health <= 0 then break end
+
+            -- Jauhnya dari posisi aman, bukan tinggi absolut map.
+            if (root.Position - pivot.Position).Magnitude > 18 then
+                restoreOwnCharacterNow(character, pivot)
+            end
+            task.wait(0.05)
+        end
+    end)
+end
+
 local function stopFling(restore)
     -- Mematikan token membuat task yang masih menunggu langsung tidak valid.
     flingToken = flingToken + 1
@@ -439,18 +480,8 @@ local function stopFling(restore)
     -- Penting: lepaskan sofa SEBELUM memulihkan posisi pemain.
     releaseOwnCouch()
 
-    if restore and savedPivot and flingCharacter and flingCharacter.Parent
-       and localPlayer.Character == flingCharacter then
-        pcall(function()
-            local humanoid = flingCharacter:FindFirstChildOfClass("Humanoid")
-            if humanoid then humanoid.Sit = false end
-            flingCharacter:PivotTo(savedPivot)
-            local root = flingCharacter:FindFirstChild("HumanoidRootPart")
-            if root then
-                root.AssemblyLinearVelocity = Vector3.zero
-                root.AssemblyAngularVelocity = Vector3.zero
-            end
-        end)
+    if restore then
+        restoreOwnCharacterNow(flingCharacter, savedPivot)
     end
 
     savedPivot = nil
@@ -574,7 +605,7 @@ local function autoMoveSeatAndThrow(target, seat)
         seat:ApplyImpulse(velocity * seat.AssemblyMass)
     end)
     if not okThrow then
-        warn("[XLORD V11] Impulse gagal:", tostring(errThrow))
+        warn("[XLORD V12] Impulse gagal:", tostring(errThrow))
     end
     return true, string.format("Seat TP ke Y=%d dari Y=%.0f; throw=%s",
         AUTO_VOID_Y, beforeY, okThrow and "dicoba" or "gagal")
@@ -702,219 +733,41 @@ local function startFling()
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
 
-        setStatus("Target duduk! Teleport sofa ke Y=-550...")
-        local okMove, result = autoMoveSeatAndThrow(target, seat)
-        if not isCurrent() then return end
-        if not okMove then
-            stopFling(true)
-            setStatus(result)
-            return
-        end
+        -- Simpan ulang fallback aman sebelum sofa berpindah.
+        local returnPivot = savedPivot
+        setStatus("Target duduk! TP sofa -> lepas -> kembali seketika...")
 
-        -- Setelah teleport & impuls, langsung lepaskan sofa.
-        -- Jeda pendek memberi satu-dua frame fisika berjalan.
-        task.wait(0.18)
-        if not isCurrent() then return end
-        setStatus("Teleport selesai. Melepas sofa...")
-        releaseOwnCouch()
-        task.wait(0.08)
-        if not isCurrent() then return end
-
-        -- Kembali ke posisi awal secara otomatis tanpa perlu klik lagi.
+        -- Semua tindakan di bawah dieksekusi pada frame yang sama:
+        -- JANGAN task.wait() antara TP ke -550 dan pemulihan diri.
+        local called, okMove, result = pcall(autoMoveSeatAndThrow, target, seat)
+        local wasCurrent = isCurrent()
+        -- stopFling: hapus gaya, unequip Couch, PivotTo posisi aman.
+        -- Dilakukan TANPA jeda, bahkan bila teleport/throw error.
         stopFling(true)
-        setStatus("AUTO selesai: " .. result .. " | Sofa lepas, kamu kembali")
-        print("[XLORD V11] AUTO:", result)
-        print("[XLORD V11] Koordinat/impuls di client, belum tentu diterima server")
-    end)
-end
+        restoreOwnCharacterNow(character, returnPivot)
+        watchOwnReturn(character, returnPivot)
 
---====================================================
--- COUCH TELEPORT + THROW (EXPERIMENTAL, CLIENT SIDE)
--- 1. Validasi target benar-benar duduk pada Seat.
--- 2. Pindahkan Seat ke Y = -550 seperti uji V9.
--- 3. Coba beri impuls linear + angular pada Seat itu.
--- 4. Karakter sendiri tidak dibawa ke void.
--- Pengamatan client BUKAN bukti server menerima perpindahan.
---====================================================
-local COUCH_TEST_Y = -550
-local COUCH_THROW_HORIZONTAL_SPEED = 180
-local COUCH_THROW_DOWN_SPEED = 165
-local COUCH_THROW_SPIN_SPEED = 110
-local seatTestRunning = false
-local seatTestToken = 0
-local activeSeat = nil
-
-local function cancelSeatTest(stopMotion)
-    seatTestToken = seatTestToken + 1
-    seatTestRunning = false
-    if stopMotion and activeSeat and activeSeat.Parent then
-        pcall(function()
-            activeSeat.AssemblyLinearVelocity = Vector3.zero
-            activeSeat.AssemblyAngularVelocity = Vector3.zero
-        end)
-    end
-    activeSeat = nil
-    if couchTeleport.Parent then
-        couchTeleport.Text = "MANUAL COUCH TP -550"
-        couchTeleport.BackgroundColor3 = COLORS.blue
-    end
-end
-
-local function startSeatTeleportTest()
-    if seatTestRunning then
-        cancelSeatTest(true)
-        setStatus("Couch throw dihentikan")
-        return
-    end
-    if flingRunning then stopFling(true) end
-
-    local target = selectedPlayer
-    if not target or target.Parent ~= Players then
-        setStatus("Pilih pemain yang sedang duduk di sofa")
-        return
-    end
-
-    local targetCharacter = target.Character
-    local targetHumanoid = targetCharacter and
-        targetCharacter:FindFirstChildOfClass("Humanoid")
-    local targetRoot = targetCharacter and
-        targetCharacter:FindFirstChild("HumanoidRootPart")
-
-    if not targetHumanoid or not targetRoot or targetHumanoid.Health <= 0 then
-        setStatus("Karakter target belum siap")
-        return
-    end
-
-    local seat = targetHumanoid.SeatPart
-    if not seat or not seat:IsA("Seat") then
-        setStatus("Target belum duduk pada Seat / sofa")
-        return
-    end
-    if seat.Occupant ~= targetHumanoid then
-        setStatus("Seat tidak terhubung ke target")
-        return
-    end
-    if not seat:IsDescendantOf(workspace) then
-        setStatus("Seat target tidak di Workspace")
-        return
-    end
-    if seat.Anchored then
-        setStatus("Seat Anchored: tidak bisa dicoba")
-        return
-    end
-
-    local ownCharacter = localPlayer.Character
-    local ownPivot = ownCharacter and ownCharacter:GetPivot()
-    local beforeY = targetRoot.Position.Y
-    local seatName = seat:GetFullName()
-    local originalSeatPivot = seat:GetPivot()
-
-    seatTestRunning = true
-    seatTestToken = seatTestToken + 1
-    local myTicket = seatTestToken
-    activeSeat = seat
-    couchTeleport.Text = "MANUAL COUCH : STOP"
-    couchTeleport.BackgroundColor3 = COLORS.red
-    setStatus("Memindahkan sofa ke Y=-550 lalu mencoba fling...")
-
-    task.spawn(function()
-        -- Siapkan arah horizontal memakai orientasi kursi,
-        -- tanpa mengasumsikan pusat map berada di (0,0,0).
-        local forward = originalSeatPivot.LookVector
-        local horizontal = Vector3.new(forward.X, 0, forward.Z)
-        if horizontal.Magnitude < 0.01 then
-            horizontal = Vector3.new(1, 0, 0)
-        else
-            horizontal = horizontal.Unit
-        end
-        local desiredVelocity =
-            horizontal * COUCH_THROW_HORIZONTAL_SPEED
-            + Vector3.new(0, -COUCH_THROW_DOWN_SPEED, 0)
-
-        local sourcePos = originalSeatPivot.Position
-        local rotation = originalSeatPivot - sourcePos
-        local destination = CFrame.new(
-            sourcePos.X,
-            COUCH_TEST_Y,
-            sourcePos.Z
-        ) * rotation
-
-        local okTeleport, teleportErr = pcall(function()
-            seat:PivotTo(destination)
-        end)
-        if myTicket ~= seatTestToken or not gui.Parent then return end
-        if not okTeleport then
-            cancelSeatTest(false)
-            setStatus("Couch TP gagal: " .. tostring(teleportErr):sub(1, 55))
+        if not wasCurrent then return end
+        if not called then
+            setStatus("Auto gagal, karakter dipulihkan: " .. tostring(okMove):sub(1, 65))
             return
         end
-
-        -- Langsung memberi dorongan sebelum fisika server
-        -- berpeluang mengembalikan atau menghancurkan kursi.
-        local okPhysics, physicsErr = pcall(function()
-            seat.AssemblyLinearVelocity = desiredVelocity
-            seat.AssemblyAngularVelocity = Vector3.new(
-                0, COUCH_THROW_SPIN_SPEED, 0
-            )
-            -- Impuls diterapkan ke assembly hanya bila
-            -- ownership dan fisika Roblox mengizinkan.
-            seat:ApplyImpulse(desiredVelocity * seat.AssemblyMass)
-        end)
-        if myTicket ~= seatTestToken or not gui.Parent then return end
-
-        task.wait(0.5)
-        if myTicket ~= seatTestToken or not gui.Parent then return end
-
-        -- Pemulihan posisi diri sendiri hanya bila tanpa
-        -- sengaja ikut bergeser; target tidak dipulihkan.
-        if ownPivot and ownCharacter and ownCharacter.Parent
-            and localPlayer.Character == ownCharacter then
-            pcall(function()
-                local root = ownCharacter:FindFirstChild("HumanoidRootPart")
-                if root and (root.Position - ownPivot.Position).Magnitude > 6 then
-                    local hum = ownCharacter:FindFirstChildOfClass("Humanoid")
-                    if hum then hum.Sit = false end
-                    ownCharacter:PivotTo(ownPivot)
-                    root.AssemblyLinearVelocity = Vector3.zero
-                    root.AssemblyAngularVelocity = Vector3.zero
-                end
-            end)
+        if not okMove then
+            setStatus("TP sofa gagal, karakter dipulihkan: " .. tostring(result))
+            return
         end
-
-        local newCharacter = target.Character
-        local newRoot = newCharacter and
-            newCharacter:FindFirstChild("HumanoidRootPart")
-        local newHumanoid = newCharacter and
-            newCharacter:FindFirstChildOfClass("Humanoid")
-        local message
-        if newRoot then
-            local attached = newHumanoid and newHumanoid.SeatPart == seat
-            message = string.format(
-                "Target Y: %.0f -> %.0f | Seat: %s | Dorongan: %s",
-                beforeY, newRoot.Position.Y,
-                attached and "TERPASANG" or "LEPAS",
-                okPhysics and "dicoba" or "gagal"
-            )
-        else
-            message = "Target tidak terlihat setelah TP (status server tidak diketahui)"
-        end
-        print("[XLORD V11] Couch:", seatName)
-        print("[XLORD V11] Physics:", okPhysics, physicsErr or "")
-        print("[XLORD V11] " .. message)
-        print("[XLORD V11] Hanya observasi client, bukan verifikasi server")
-        cancelSeatTest(false)
-        setStatus(message)
+        setStatus("AUTO selesai: " .. result .. " | Sofa lepas, kamu kembali")
+        print("[XLORD V12] AUTO:", result)
+        print("[XLORD V12] Posisi target di client tidak menjamin posisi server")
     end)
 end
 
-listen(couchTeleport.MouseButton1Click:Connect(startSeatTeleportTest))
-
-listen(teleport.MouseButton1Click:Connect(function()
-    if seatTestRunning then cancelSeatTest(true) end
-    teleportToSelected()
-end))
+--====================================================
+-- ONLY AUTOMATIC SOFA + STANDARD TELEPORT BUTTONS
+-- Manual Couch TP button has been removed.
+--====================================================
+listen(teleport.MouseButton1Click:Connect(teleportToSelected))
 listen(fling.MouseButton1Click:Connect(function()
-    if seatTestRunning then cancelSeatTest(true) end
     if flingRunning then
         stopFling(true)
         setStatus("Auto Sofa dibatalkan, kembali ke posisi awal")
@@ -963,7 +816,6 @@ local function refreshPlayers()
                 -- Destroying the row also disconnects its click handler.
                 row.MouseButton1Click:Connect(function()
                     if flingRunning then stopFling(true) end
-                    if seatTestRunning then cancelSeatTest(true) end
                     selectedPlayer = player
                     targetLabel.Text = "Target: @" .. player.Name
                     setStatus("Target dipilih")
@@ -983,7 +835,6 @@ listen(Players.PlayerAdded:Connect(refreshPlayers))
 listen(Players.PlayerRemoving:Connect(function(player)
     if player == selectedPlayer then
         if flingRunning then stopFling(true) end
-        if seatTestRunning then cancelSeatTest(true) end
         selectedPlayer = nil
         targetLabel.Text = "Target: Belum dipilih"
     end
@@ -1019,7 +870,7 @@ local prompt = Instance.new("TextLabel")
 prompt.Size = UDim2.new(1, -14, 0, 77)
 prompt.Position = UDim2.fromOffset(7, 6)
 prompt.BackgroundTransparency = 1
-prompt.Text = "Yakin ingin menutup\nXLORD V11?"
+prompt.Text = "Yakin ingin menutup\nXLORD V12?"
 prompt.TextColor3 = Color3.new(1, 1, 1)
 prompt.Font = Enum.Font.GothamBold
 prompt.TextSize = 15
@@ -1116,7 +967,6 @@ end))
 -- CLEANUP AND RUN
 --====================================================
 gui.Destroying:Connect(function()
-    cancelSeatTest(true)
     stopFling(true)
     if cameraConnection then cameraConnection:Disconnect() end
     for _, connection in ipairs(connections) do
@@ -1126,4 +976,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V11] Loaded: One-Click Auto Sofa (TP -550 -> throw -> release -> return), manual Couch TP, XYZ, resize, minimize")
+print("[XLORD V12] Loaded: Auto Sofa + immediate own rescue, Teleport, XYZ, resize, minimize")
