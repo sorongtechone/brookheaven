@@ -346,7 +346,7 @@ local function spawnTrampolineUnderTarget()
 
     -- Standard R15/R6 foot approximation from HumanoidRootPart.
     local feetY = root.Position.Y - root.Size.Y / 2 - hum.HipHeight
-    local basePosition = Vector3.new(root.Position.X, feetY + 0.75, root.Position.Z)
+    local basePosition = Vector3.new(root.Position.X, feetY + 0.95, root.Position.Z)
 
     if spawnedTrampoline then
         spawnedTrampoline:Destroy()
