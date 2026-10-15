@@ -1,79 +1,59 @@
-
---==========================================
--- XLORD V4 | BROOKHAVEN RP
--- TELEPORT + SOFA FLING
--- RESIZE + MINIMIZE + CONFIRM CLOSE
---==========================================
+--====================================================
+-- XLORD HUB V5 | BROOKHAVEN RP
+-- Teleport, Sofa Fling, Resize, Minimize, Close Confirm
+-- Scroll fix: no UIScale; explicit content height
+--====================================================
 
 local Players = game:GetService("Players")
-local RS = game:GetService("ReplicatedStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
+local UserInputService = game:GetService("UserInputService")
 
-local LP = Players.LocalPlayer
-local PlayerGui = LP:WaitForChild("PlayerGui")
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
 
---==========================================
--- CLEAN PREVIOUS GUI
---==========================================
+-- Remove old version before creating a new one.
+local previous = playerGui:FindFirstChild("XLORD_Teleport")
+if previous then previous:Destroy() end
 
-local old = PlayerGui:FindFirstChild("XLORD_Teleport")
-
-if old then
-    old:Destroy()
-end
-
---==========================================
--- VARIABLES
---==========================================
-
-local selected = nil
-local running = false
-local token = 0
-local originalPos = nil
-local activeChar = nil
-local spinForce = nil
-local pushForce = nil
 local connections = {}
-
-local MIN_SCALE = 0.45
-local MAX_SCALE = 1.25
-local DEFAULT_SCALE = 0.78
-
-local function bind(connection)
+local function listen(connection)
     table.insert(connections, connection)
     return connection
 end
 
-local function corner(parent, radius)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, radius or 8)
-    c.Parent = parent
-    return c
+local function round(object, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 8)
+    corner.Parent = object
 end
 
-local function makeButton(
-    parent, name, txt, pos, size, color
-)
-    local b = Instance.new("TextButton")
-    b.Name = name
-    b.Size = size
-    b.Position = pos
-    b.BackgroundColor3 = color
-    b.BorderSizePixel = 0
-    b.TextColor3 = Color3.new(1, 1, 1)
-    b.Text = txt
-    b.TextSize = 13
-    b.Font = Enum.Font.GothamBold
-    b.Parent = parent
-
-    corner(b, 8)
-    return b
+local function button(parent, name, caption, color)
+    local item = Instance.new("TextButton")
+    item.Name = name
+    item.BackgroundColor3 = color
+    item.BorderSizePixel = 0
+    item.Text = caption
+    item.TextColor3 = Color3.new(1, 1, 1)
+    item.TextSize = 13
+    item.Font = Enum.Font.GothamBold
+    item.AutoButtonColor = true
+    item.Parent = parent
+    round(item, 7)
+    return item
 end
 
---==========================================
--- GUI ROOT
---==========================================
+local COLORS = {
+    panel = Color3.fromRGB(25, 27, 38),
+    field = Color3.fromRGB(43, 46, 62),
+    list = Color3.fromRGB(33, 36, 49),
+    row = Color3.fromRGB(50, 54, 73),
+    selected = Color3.fromRGB(44, 123, 92),
+    blue = Color3.fromRGB(49, 104, 215),
+    green = Color3.fromRGB(42, 143, 100),
+    orange = Color3.fromRGB(185, 105, 38),
+    red = Color3.fromRGB(205, 55, 65)
+}
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "XLORD_Teleport"
@@ -81,1061 +61,637 @@ gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.DisplayOrder = 1000
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = PlayerGui
+gui.Parent = playerGui
 
 local main = Instance.new("Frame")
 main.Name = "Main"
-main.Size = UDim2.fromOffset(320, 470)
 main.AnchorPoint = Vector2.new(0.5, 0.5)
 main.Position = UDim2.fromScale(0.5, 0.5)
-main.BackgroundColor3 = Color3.fromRGB(25, 27, 38)
+main.Size = UDim2.fromOffset(320, 470)
+main.BackgroundColor3 = COLORS.panel
 main.BorderSizePixel = 0
 main.Active = true
 main.Parent = gui
-
-corner(main, 12)
-
---==========================================
--- RESPONSIVE GUI SCALE
---==========================================
-
-local scale = Instance.new("UIScale")
-scale.Name = "XLORD_UIScale"
-scale.Parent = main
-
-local function getMaxScale()
-    local camera = workspace.CurrentCamera
-
-    if not camera then
-        return 1.0
-    end
-
-    local view = camera.ViewportSize
-
-    local widthLimit = (view.X - 24) / 320
-    local heightLimit = (view.Y - 24) / 470
-
-    return math.max(
-        MIN_SCALE,
-        math.min(
-            MAX_SCALE,
-            widthLimit,
-            heightLimit
-        )
-    )
-end
-
-local function setScale(value)
-    scale.Scale = math.clamp(
-        value,
-        MIN_SCALE,
-        getMaxScale()
-    )
-end
-
-setScale(DEFAULT_SCALE)
-
---==========================================
--- HEADER
---==========================================
+round(main, 12)
 
 local header = Instance.new("TextLabel")
-header.Name = "Header"
-header.Size = UDim2.new(1, -165, 0, 44)
-header.Position = UDim2.fromOffset(12, 0)
+header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V4"
-header.TextColor3 = Color3.new(1, 1, 1)
-header.TextSize = 17
-header.Font = Enum.Font.GothamBold
+header.Text = "XLORD | V5"
 header.TextXAlignment = Enum.TextXAlignment.Left
+header.TextColor3 = Color3.new(1, 1, 1)
+header.TextSize = 15
+header.Font = Enum.Font.GothamBold
 header.Active = true
 header.Parent = main
 
---==========================================
--- WINDOW CONTROL BUTTONS
---==========================================
+local smaller = button(main, "Smaller", "-", COLORS.field)
+local larger = button(main, "Larger", "+", COLORS.blue)
+local minimize = button(main, "Minimize", "_", COLORS.green)
+local close = button(main, "Close", "X", COLORS.red)
 
-local shrink = makeButton(
-    main,
-    "Shrink",
-    "-",
-    UDim2.new(1, -152, 0, 7),
-    UDim2.fromOffset(33, 32),
-    Color3.fromRGB(65, 75, 100)
-)
-
-local enlarge = makeButton(
-    main,
-    "Enlarge",
-    "+",
-    UDim2.new(1, -115, 0, 7),
-    UDim2.fromOffset(33, 32),
-    Color3.fromRGB(45, 110, 210)
-)
-
-local minimize = makeButton(
-    main,
-    "Minimize",
-    "_",
-    UDim2.new(1, -78, 0, 7),
-    UDim2.fromOffset(33, 32),
-    Color3.fromRGB(55, 125, 95)
-)
-
-local close = makeButton(
-    main,
-    "Close",
-    "X",
-    UDim2.new(1, -41, 0, 7),
-    UDim2.fromOffset(33, 32),
-    Color3.fromRGB(205, 55, 65)
-)
-
---==========================================
--- FLOATING MINI BUTTON
---==========================================
-
-local floating = makeButton(
-    gui,
-    "XLORD_Floating",
-    "XL",
-    UDim2.fromOffset(12, 160),
-    UDim2.fromOffset(44, 44),
-    Color3.fromRGB(35, 105, 210)
-)
-
+local floating = button(gui, "FloatingXL", "XL", COLORS.blue)
+floating.Size = UDim2.fromOffset(44, 44)
+floating.Position = UDim2.fromOffset(12, 160)
 floating.TextSize = 16
 floating.Visible = false
 floating.Active = true
 floating.ZIndex = 100
-
-local floatingCorner =
-    floating:FindFirstChildOfClass("UICorner")
-
-if floatingCorner then
-    floatingCorner.CornerRadius = UDim.new(1, 0)
-end
-
---==========================================
--- SEARCH
---==========================================
+local floatCorner = floating:FindFirstChildOfClass("UICorner")
+if floatCorner then floatCorner.CornerRadius = UDim.new(1, 0) end
 
 local search = Instance.new("TextBox")
 search.Name = "Search"
-search.Size = UDim2.new(1, -20, 0, 36)
-search.Position = UDim2.fromOffset(10, 48)
-search.BackgroundColor3 = Color3.fromRGB(43, 46, 62)
+search.BackgroundColor3 = COLORS.field
+search.BorderSizePixel = 0
 search.TextColor3 = Color3.new(1, 1, 1)
-search.PlaceholderColor3 =
-    Color3.fromRGB(165, 170, 180)
-search.PlaceholderText = "Cari nama pemain..."
-search.Text = ""
-search.TextSize = 14
-search.Font = Enum.Font.Gotham
+search.PlaceholderColor3 = Color3.fromRGB(172, 176, 190)
+search.PlaceholderText = "Cari username / display name..."
 search.ClearTextOnFocus = false
+search.Text = ""
+search.TextSize = 13
+search.Font = Enum.Font.Gotham
 search.Parent = main
+round(search, 7)
 
-corner(search, 8)
+local refresh = button(main, "Refresh", "REFRESH PLAYERS", COLORS.blue)
 
---==========================================
--- REFRESH PLAYERS
---==========================================
-
-local refresh = makeButton(
-    main,
-    "Refresh",
-    "REFRESH PLAYERS",
-    UDim2.fromOffset(10, 91),
-    UDim2.new(1, -20, 0, 32),
-    Color3.fromRGB(48, 107, 215)
-)
-
---==========================================
--- PLAYER LIST
---==========================================
-
+-- The player list deliberately has no UIScale in any ancestor.
 local scroll = Instance.new("ScrollingFrame")
 scroll.Name = "PlayerList"
-scroll.Size = UDim2.new(1, -20, 0, 174)
-scroll.Position = UDim2.fromOffset(10, 130)
-scroll.BackgroundColor3 =
-    Color3.fromRGB(33, 36, 49)
+scroll.BackgroundColor3 = COLORS.list
 scroll.BorderSizePixel = 0
-scroll.ScrollBarThickness = 4
 scroll.CanvasSize = UDim2.fromOffset(0, 0)
-scroll.ScrollingDirection =
-    Enum.ScrollingDirection.Y
-scroll.Parent = main
-
-corner(scroll, 8)
-
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 5)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Parent = scroll
-
-
---==========================================
--- FIX SCROLL PLAYER LIST
--- XLORD V4
---==========================================
-
-scroll.Active = true
-scroll.ScrollingEnabled = true
-scroll.ScrollingDirection = Enum.ScrollingDirection.Y
 scroll.AutomaticCanvasSize = Enum.AutomaticSize.None
+scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+scroll.ScrollingEnabled = true
+scroll.ElasticBehavior = Enum.ElasticBehavior.Never
+scroll.ScrollBarThickness = 5
+scroll.Active = true
+scroll.ClipsDescendants = true
+scroll.Parent = main
+round(scroll, 8)
 
-local function updateScrollCanvas()
-    if not scroll.Parent then
-        return
-    end
+local listPadding = Instance.new("UIPadding")
+listPadding.PaddingTop = UDim.new(0, 6)
+listPadding.PaddingBottom = UDim.new(0, 6)
+listPadding.PaddingLeft = UDim.new(0, 6)
+listPadding.PaddingRight = UDim.new(0, 6)
+listPadding.Parent = scroll
 
-    local count = 0
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 6)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = scroll
 
-    for _, item in ipairs(scroll:GetChildren()) do
-        if item:IsA("TextButton") then
-            count = count + 1
-        end
-    end
+local targetLabel = Instance.new("TextLabel")
+targetLabel.Name = "SelectedTarget"
+targetLabel.BackgroundTransparency = 1
+targetLabel.Text = "Target: Belum dipilih"
+targetLabel.TextColor3 = Color3.fromRGB(140, 205, 255)
+targetLabel.TextSize = 13
+targetLabel.Font = Enum.Font.GothamBold
+targetLabel.TextTruncate = Enum.TextTruncate.AtEnd
+targetLabel.TextXAlignment = Enum.TextXAlignment.Left
+targetLabel.Parent = main
 
-    -- Ukuran tiap tombol pemain: 38
-    -- Jarak antar tombol: 5
-    -- Tambahan ruang bawah: 24
-
-    local height =
-        (count * 38) +
-        (math.max(0, count - 1) * 5) +
-        24
-
-    scroll.CanvasSize = UDim2.fromOffset(0, height)
-end
-
-bind(scroll.ChildAdded:Connect(function(child)
-    if child:IsA("TextButton") then
-        task.defer(updateScrollCanvas)
-    end
-end))
-
-bind(scroll.ChildRemoved:Connect(function(child)
-    if child:IsA("TextButton") then
-        task.defer(updateScrollCanvas)
-    end
-end))
-
-updateScrollCanvas()
-
-
---==========================================
--- SELECTED PLAYER
---==========================================
-
-local selectedLabel = Instance.new("TextLabel")
-selectedLabel.Name = "SelectedPlayer"
-selectedLabel.Size = UDim2.new(1, -20, 0, 28)
-selectedLabel.Position = UDim2.fromOffset(10, 310)
-selectedLabel.BackgroundTransparency = 1
-selectedLabel.Text = "Target: Belum dipilih"
-selectedLabel.TextColor3 =
-    Color3.fromRGB(130, 205, 255)
-selectedLabel.Font = Enum.Font.GothamBold
-selectedLabel.TextSize = 13
-selectedLabel.TextTruncate =
-    Enum.TextTruncate.AtEnd
-selectedLabel.Parent = main
-
---==========================================
--- TELEPORT BUTTON
---==========================================
-
-local tpButton = makeButton(
-    main,
-    "Teleport",
-    "TELEPORT TO PLAYER",
-    UDim2.fromOffset(10, 344),
-    UDim2.new(1, -20, 0, 37),
-    Color3.fromRGB(40, 145, 100)
-)
-
---==========================================
--- SOFA FLING BUTTON
---==========================================
-
-local flingButton = makeButton(
-    main,
-    "Fling",
-    "SOFA FLING : START",
-    UDim2.fromOffset(10, 389),
-    UDim2.new(1, -20, 0, 37),
-    Color3.fromRGB(185, 105, 38)
-)
-
---==========================================
--- STATUS LABEL
---==========================================
+local teleport = button(main, "Teleport", "TELEPORT TO PLAYER", COLORS.green)
+local fling = button(main, "SofaFling", "SOFA FLING : START", COLORS.orange)
 
 local status = Instance.new("TextLabel")
 status.Name = "Status"
-status.Size = UDim2.new(1, -20, 0, 36)
-status.Position = UDim2.fromOffset(10, 430)
 status.BackgroundTransparency = 1
-status.Text = "XLORD V4 siap digunakan"
-status.TextColor3 =
-    Color3.fromRGB(185, 190, 205)
+status.Text = "XLORD V5 siap digunakan"
+status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
-status.TextWrapped = true
 status.Font = Enum.Font.Gotham
+status.TextWrapped = true
 status.Parent = main
 
 local function setStatus(message)
-    if gui.Parent then
-        status.Text = message
+    if gui.Parent then status.Text = message end
+end
+
+--====================================================
+-- RESIZE: change real pixel dimensions, NOT UIScale.
+--====================================================
+local width, height = 320, 470
+local MIN_WIDTH, MIN_HEIGHT = 240, 345
+local MAX_WIDTH, MAX_HEIGHT = 420, 610
+local ROW_HEIGHT, ROW_GAP, LIST_PADDING = 38, 6, 6
+local listCount = 0
+local canvasRevision = 0
+
+local function viewportSize()
+    local camera = workspace.CurrentCamera
+    return camera and camera.ViewportSize or Vector2.new(800, 600)
+end
+
+local function updateCanvas(resetPosition)
+    if not gui.Parent then return end
+    canvasRevision = canvasRevision + 1
+    local revision = canvasRevision
+
+    -- Exact height in unscaled pixels (including both paddings).
+    local rowsHeight = listCount * ROW_HEIGHT
+    local gapsHeight = math.max(0, listCount - 1) * ROW_GAP
+    local canvasHeight = rowsHeight + gapsHeight + LIST_PADDING * 2 + 28
+    scroll.CanvasSize = UDim2.fromOffset(0, canvasHeight)
+
+    if resetPosition then scroll.CanvasPosition = Vector2.zero end
+
+    -- Reapply after layout/render to avoid stale scroll bounds.
+    task.spawn(function()
+        RunService.Heartbeat:Wait()
+        if not gui.Parent or revision ~= canvasRevision then return end
+        scroll.CanvasSize = UDim2.fromOffset(0, canvasHeight)
+        local maxY = math.max(0, canvasHeight - scroll.AbsoluteWindowSize.Y)
+        scroll.CanvasPosition = Vector2.new(
+            0, math.clamp(scroll.CanvasPosition.Y, 0, maxY)
+        )
+    end)
+end
+
+local function ensureOnScreen(object)
+    local view = viewportSize()
+    if object == main then
+        local halfW, halfH = width / 2, height / 2
+        local pos = main.AbsolutePosition
+        local centerX = math.clamp(pos.X + halfW, halfW, math.max(halfW, view.X - halfW))
+        local centerY = math.clamp(pos.Y + halfH, halfH, math.max(halfH, view.Y - halfH))
+        main.Position = UDim2.fromOffset(centerX, centerY)
+    else
+        local pos = floating.AbsolutePosition
+        local sz = floating.AbsoluteSize
+        floating.Position = UDim2.fromOffset(
+            math.clamp(pos.X, 0, math.max(0, view.X - sz.X)),
+            math.clamp(pos.Y, 0, math.max(0, view.Y - sz.Y))
+        )
     end
 end
 
---==========================================
--- STOP FLING / CLEANUP FORCES
---==========================================
+local function applySize(newWidth, newHeight)
+    local view = viewportSize()
+    local maximumWidth = math.min(MAX_WIDTH, math.max(180, view.X - 16))
+    local maximumHeight = math.min(MAX_HEIGHT, math.max(300, view.Y - 16))
+    width = math.clamp(newWidth, math.min(MIN_WIDTH, maximumWidth), maximumWidth)
+    height = math.clamp(newHeight, math.min(MIN_HEIGHT, maximumHeight), maximumHeight)
 
-local function removeForces()
-    if spinForce then
-        spinForce:Destroy()
-        spinForce = nil
-    end
+    main.Size = UDim2.fromOffset(width, height)
+    header.Position = UDim2.fromOffset(12, 0)
+    header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
+    header.Text = width < 275 and "XLORD" or "XLORD | V5"
 
-    if pushForce then
-        pushForce:Destroy()
-        pushForce = nil
-    end
+    local sizeBtn = 30
+    smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
+    minimize.Size, close.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
+    smaller.Position = UDim2.fromOffset(width - 144, 6)
+    larger.Position = UDim2.fromOffset(width - 110, 6)
+    minimize.Position = UDim2.fromOffset(width - 76, 6)
+    close.Position = UDim2.fromOffset(width - 42, 6)
+
+    search.Position = UDim2.fromOffset(10, 47)
+    search.Size = UDim2.fromOffset(width - 20, 35)
+    refresh.Position = UDim2.fromOffset(10, 88)
+    refresh.Size = UDim2.fromOffset(width - 20, 31)
+
+    local listHeight = math.max(35, height - 280)
+    scroll.Position = UDim2.fromOffset(10, 125)
+    scroll.Size = UDim2.fromOffset(width - 20, listHeight)
+
+    local targetY = 125 + listHeight + 7
+    targetLabel.Position = UDim2.fromOffset(12, targetY)
+    targetLabel.Size = UDim2.fromOffset(width - 24, 22)
+    teleport.Position = UDim2.fromOffset(10, targetY + 28)
+    teleport.Size = UDim2.fromOffset(width - 20, 34)
+    fling.Position = UDim2.fromOffset(10, targetY + 68)
+    fling.Size = UDim2.fromOffset(width - 20, 34)
+    status.Position = UDim2.fromOffset(10, targetY + 108)
+    status.Size = UDim2.fromOffset(width - 20, 31)
+
+    updateCanvas(false)
+    task.defer(function()
+        if gui.Parent and main.Visible then ensureOnScreen(main) end
+    end)
 end
+
+applySize(width, height)
+
+listen(smaller.MouseButton1Click:Connect(function()
+    applySize(width - 20, height - 30)
+end))
+listen(larger.MouseButton1Click:Connect(function()
+    applySize(width + 20, height + 30)
+end))
+
+local cameraConnection
+local function watchCamera()
+    if cameraConnection then cameraConnection:Disconnect() end
+    local camera = workspace.CurrentCamera
+    if camera then
+        cameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+            if gui.Parent then applySize(width, height) end
+        end)
+    end
+    applySize(width, height)
+end
+listen(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera))
+watchCamera()
+
+--====================================================
+-- TELEPORT AND SOFA FLING
+--====================================================
+local selectedPlayer
+local flingRunning = false
+local flingToken = 0
+local savedPivot
+local flingCharacter
+local pushForce
+local spinForce
 
 local function stopFling(restore)
-    token = token + 1
-    running = false
+    flingToken = flingToken + 1
+    flingRunning = false
+    if pushForce then pushForce:Destroy(); pushForce = nil end
+    if spinForce then spinForce:Destroy(); spinForce = nil end
 
-    removeForces()
-
-    if restore
-        and originalPos
-        and activeChar
-        and activeChar.Parent then
-
+    if restore and savedPivot and flingCharacter and flingCharacter.Parent
+       and localPlayer.Character == flingCharacter then
         pcall(function()
-            activeChar:PivotTo(originalPos)
-
-            local root =
-                activeChar:FindFirstChild(
-                    "HumanoidRootPart"
-                )
-
+            flingCharacter:PivotTo(savedPivot)
+            local root = flingCharacter:FindFirstChild("HumanoidRootPart")
             if root then
-                root.AssemblyLinearVelocity =
-                    Vector3.zero
-
-                root.AssemblyAngularVelocity =
-                    Vector3.zero
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
             end
         end)
     end
 
-    originalPos = nil
-    activeChar = nil
-
-    flingButton.Text = "SOFA FLING : START"
-    flingButton.BackgroundColor3 =
-        Color3.fromRGB(185, 105, 38)
+    savedPivot = nil
+    flingCharacter = nil
+    fling.Text = "SOFA FLING : START"
+    fling.BackgroundColor3 = COLORS.orange
 end
 
---==========================================
--- GET COUCH
---==========================================
-
 local function getCouch()
-    local char = LP.Character
-    local backpack = LP:FindFirstChild("Backpack")
-
-    if not char or not backpack then
-        return nil, "Karakter belum tersedia"
+    local character = localPlayer.Character
+    local backpack = localPlayer:FindFirstChildOfClass("Backpack")
+    if not character or not backpack then
+        return nil, "Karakter atau Backpack tidak ada"
     end
+    local found = character:FindFirstChild("Couch") or backpack:FindFirstChild("Couch")
+    if found and found:IsA("Tool") then return found end
 
-    local existing =
-        char:FindFirstChild("Couch")
-        or backpack:FindFirstChild("Couch")
-
-    if existing and existing:IsA("Tool") then
-        return existing
-    end
-
-    local re = RS:FindFirstChild("RE")
-    local remote =
-        re and re:FindFirstChild("1Too1l")
-
-    if not remote
-        or not remote:IsA("RemoteFunction") then
-
+    local reFolder = ReplicatedStorage:FindFirstChild("RE")
+    local remote = reFolder and reFolder:FindFirstChild("1Too1l")
+    if not remote or not remote:IsA("RemoteFunction") then
         return nil, "Remote Couch tidak ditemukan"
     end
 
     local ok = pcall(function()
-        remote:InvokeServer(
-            "PickingTools",
-            "Couch"
-        )
+        remote:InvokeServer("PickingTools", "Couch")
     end)
-
-    if not ok then
-        return nil, "Gagal mengambil Couch"
-    end
-
-    local couch =
-        backpack:WaitForChild("Couch", 3)
-        or char:FindFirstChild("Couch")
-
-    if not couch or not couch:IsA("Tool") then
+    if not ok then return nil, "Permintaan Couch gagal" end
+    local tool = backpack:WaitForChild("Couch", 3) or character:FindFirstChild("Couch")
+    if not tool or not tool:IsA("Tool") then
         return nil, "Couch tidak tersedia"
     end
-
-    return couch
+    return tool
 end
 
---==========================================
--- START SOFA FLING
---==========================================
+local function teleportToSelected()
+    if not selectedPlayer or selectedPlayer.Parent ~= Players then
+        setStatus("Pilih target terlebih dahulu")
+        return
+    end
+    if flingRunning then stopFling(true) end
+    local character = localPlayer.Character
+    local theirs = selectedPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local theirRoot = theirs and theirs:FindFirstChild("HumanoidRootPart")
+    if not root or not theirRoot then
+        setStatus("Karakter target belum siap")
+        return
+    end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid.Sit = false end
+    character:PivotTo(theirRoot.CFrame * CFrame.new(0, 0, 3))
+    setStatus("Teleport ke @" .. selectedPlayer.Name)
+end
 
 local function startFling()
-    if running then
+    if flingRunning then return end
+    local target = selectedPlayer
+    if not target or target.Parent ~= Players then
+        setStatus("Pilih target terlebih dahulu")
+        return
+    end
+    local character = localPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local theirs = target.Character
+    local theirRoot = theirs and theirs:FindFirstChild("HumanoidRootPart")
+    if not root or not humanoid or humanoid.Health <= 0 or not theirRoot then
+        setStatus("Karakter belum siap")
         return
     end
 
-    if not selected or selected.Parent ~= Players then
-        setStatus("Pilih pemain terlebih dahulu!")
-        return
-    end
-
-    local target = selected
-    local char = LP.Character
-
-    local root =
-        char and char:FindFirstChild(
-            "HumanoidRootPart"
-        )
-
-    local hum =
-        char and char:FindFirstChildOfClass(
-            "Humanoid"
-        )
-
-    if not root or not hum or hum.Health <= 0 then
-        setStatus("Karakter sendiri belum siap")
-        return
-    end
-
-    local targetRoot =
-        target.Character and
-        target.Character:FindFirstChild(
-            "HumanoidRootPart"
-        )
-
-    if not targetRoot then
-        setStatus("Target belum siap")
-        return
-    end
-
-    running = true
-    token = token + 1
-
-    local thisToken = token
-
-    activeChar = char
-    originalPos = char:GetPivot()
-
-    flingButton.Text = "SOFA FLING : STOP"
-    flingButton.BackgroundColor3 =
-        Color3.fromRGB(200, 50, 65)
-
-    setStatus("Mengambil sofa...")
+    flingRunning = true
+    flingToken = flingToken + 1
+    local myToken = flingToken
+    flingCharacter = character
+    savedPivot = character:GetPivot()
+    fling.Text = "SOFA FLING : STOP"
+    fling.BackgroundColor3 = COLORS.red
+    setStatus("Mempersiapkan sofa...")
 
     task.spawn(function()
         local couch, err = getCouch()
-
-        if not running or token ~= thisToken then
-            return
-        end
-
+        if not flingRunning or myToken ~= flingToken then return end
         if not couch then
             stopFling(false)
-            setStatus(err or "Gagal mengambil sofa")
+            setStatus(err)
             return
         end
 
-        local equipped = pcall(function()
-            hum:EquipTool(couch)
+        local success = pcall(function()
+            humanoid:EquipTool(couch)
             task.wait(0.2)
             couch:Activate()
         end)
-
-        if not running or token ~= thisToken then
-            return
-        end
-
-        if not equipped then
+        if not flingRunning or myToken ~= flingToken then return end
+        if not success then
             stopFling(false)
-            setStatus("Gagal mengaktifkan sofa")
+            setStatus("Sofa gagal diaktifkan")
             return
         end
 
-        -- Coba interaksi dengan sofa
+        -- Retain the optional interaction attempt from V4.
         pcall(function()
-            local vim = game:GetService(
-                "VirtualInputManager"
-            )
-
-            vim:SendKeyEvent(
-                true,
-                Enum.KeyCode.F,
-                false,
-                game
-            )
-
-            vim:SendKeyEvent(
-                false,
-                Enum.KeyCode.F,
-                false,
-                game
-            )
+            local vim = game:GetService("VirtualInputManager")
+            vim:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+            vim:SendKeyEvent(false, Enum.KeyCode.F, false, game)
         end)
+        if not flingRunning or myToken ~= flingToken then return end
 
-        if not running or token ~= thisToken then
-            return
-        end
-
-        -- Dorongan fisika
         local push = Instance.new("BodyVelocity")
         push.Name = "XLORD_FlingPush"
-        push.MaxForce = Vector3.new(
-            200000,
-            100000,
-            200000
-        )
+        push.MaxForce = Vector3.new(200000, 100000, 200000)
         push.P = 12500
         push.Velocity = Vector3.zero
         push.Parent = root
         pushForce = push
 
-        -- Rotasi fisika
-        local spin = Instance.new(
-            "BodyAngularVelocity"
-        )
+        local spin = Instance.new("BodyAngularVelocity")
         spin.Name = "XLORD_FlingSpin"
-        spin.MaxTorque = Vector3.new(
-            1e8, 1e8, 1e8
-        )
+        spin.MaxTorque = Vector3.new(1e8, 1e8, 1e8)
         spin.P = 50000
-        spin.AngularVelocity =
-            Vector3.new(0, 110, 0)
+        spin.AngularVelocity = Vector3.new(0, 110, 0)
         spin.Parent = root
         spinForce = spin
 
-        setStatus(
-            "Fling aktif: @" .. target.Name
-        )
+        setStatus("Sofa Fling aktif: @" .. target.Name)
+        local startTime = os.clock()
+        while flingRunning and myToken == flingToken and gui.Parent
+          and target.Parent == Players and character.Parent
+          and os.clock() - startTime < 8 do
+            local tChar = target.Character
+            local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+            local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+            if not tRoot or not tHum or tHum.Health <= 0 then break end
 
-        local beginTime = os.clock()
-        local maxDuration = 8
-
-        while running
-            and token == thisToken
-            and gui.Parent
-            and char.Parent
-            and target.Parent == Players do
-
-            local tr =
-                target.Character and
-                target.Character:FindFirstChild(
-                    "HumanoidRootPart"
-                )
-
-            local th =
-                target.Character and
-                target.Character:FindFirstChildOfClass(
-                    "Humanoid"
-                )
-
-            if not tr or not th or th.Health <= 0 then
-                break
-            end
-
-            if os.clock() - beginTime >= maxDuration then
-                break
-            end
-
-            local t = os.clock() - beginTime
-            local angle = t * 28
-            local radius = 1.3
-
+            local time = os.clock() - startTime
+            local angle = time * 28
             local offset = Vector3.new(
-                math.cos(angle) * radius,
+                math.cos(angle) * 1.3,
                 math.sin(angle * 3) * 0.8,
-                math.sin(angle) * radius
+                math.sin(angle) * 1.3
             )
-
-            local destination =
-                tr.Position + offset
-
             pcall(function()
-                root.CFrame = CFrame.new(
-                    destination,
-                    tr.Position
-                )
-
-                local direction =
-                    tr.Position - root.Position
-
+                root.CFrame = CFrame.new(tRoot.Position + offset, tRoot.Position)
+                local direction = tRoot.Position - root.Position
                 if direction.Magnitude > 0.01 then
-                    push.Velocity =
-                        direction.Unit * 135
+                    push.Velocity = direction.Unit * 135
                 end
-
-                root.AssemblyAngularVelocity =
-                    Vector3.new(0, 110, 0)
+                root.AssemblyAngularVelocity = Vector3.new(0, 110, 0)
             end)
-
             RunService.Heartbeat:Wait()
         end
-
-        if token == thisToken then
+        if myToken == flingToken then
             stopFling(true)
-            setStatus("Sofa Fling selesai")
+            setStatus("Sofa Fling selesai / dihentikan")
         end
     end)
 end
 
---==========================================
--- TELEPORT TO SELECTED PLAYER
---==========================================
-
-local function teleportToSelected()
-    if not selected or selected.Parent ~= Players then
-        setStatus("Pilih pemain terlebih dahulu!")
-        return
-    end
-
-    if running then
+listen(teleport.MouseButton1Click:Connect(teleportToSelected))
+listen(fling.MouseButton1Click:Connect(function()
+    if flingRunning then
         stopFling(true)
+        setStatus("Sofa Fling dihentikan")
+    else
+        startFling()
+    end
+end))
+listen(localPlayer.CharacterAdded:Connect(function()
+    if flingRunning then stopFling(false) end
+end))
+
+--====================================================
+-- PLAYER LIST: update once after row changes.
+--====================================================
+local function refreshPlayers()
+    if not gui.Parent then return end
+    for _, item in ipairs(scroll:GetChildren()) do
+        if item:IsA("TextButton") then item:Destroy() end
     end
 
-    local char = LP.Character
-    local tchar = selected.Character
-
-    local root =
-        char and char:FindFirstChild(
-            "HumanoidRootPart"
-        )
-
-    local troot =
-        tchar and tchar:FindFirstChild(
-            "HumanoidRootPart"
-        )
-
-    if not root or not troot then
-        setStatus("Karakter belum tersedia")
-        return
-    end
-
-    local hum =
-        char:FindFirstChildOfClass("Humanoid")
-
-    if hum then
-        hum.Sit = false
-    end
-
-    char:PivotTo(
-        troot.CFrame * CFrame.new(0, 0, 3)
-    )
-
-    setStatus(
-        "Teleport ke @" .. selected.Name
-    )
-end
-
---==========================================
--- UPDATE PLAYER LIST
---==========================================
-
-local function updatePlayers()
-    if not gui.Parent then
-        return
-    end
-
-    for _, child in ipairs(scroll:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
-        end
-    end
-
-    local keyword = search.Text:lower()
-    local list = Players:GetPlayers()
-
-    table.sort(list, function(a, b)
+    local needle = search.Text:lower()
+    local all = Players:GetPlayers()
+    table.sort(all, function(a, b)
         return a.Name:lower() < b.Name:lower()
     end)
 
-    local count = 0
-
-    for _, player in ipairs(list) do
-        if player ~= LP then
-            local name = player.Name:lower()
-            local display = player.DisplayName:lower()
-
-            local matches =
-                keyword == ""
-                or name:find(keyword, 1, true)
-                or display:find(keyword, 1, true)
-
-            if matches then
-                count = count + 1
-
-                local color =
-                    selected == player
-                    and Color3.fromRGB(45, 125, 95)
-                    or Color3.fromRGB(50, 54, 73)
-
-                local button = makeButton(
+    local index = 0
+    for _, player in ipairs(all) do
+        if player ~= localPlayer then
+            local match = needle == ""
+                or player.Name:lower():find(needle, 1, true)
+                or player.DisplayName:lower():find(needle, 1, true)
+            if match then
+                index = index + 1
+                local row = button(
                     scroll,
-                    "Player_" .. player.Name,
-                    player.DisplayName ..
-                    " (@" .. player.Name .. ")",
-                    UDim2.fromOffset(4, 0),
-                    UDim2.new(1, -8, 0, 38),
-                    color
+                    "Player_" .. player.UserId,
+                    player.DisplayName .. " (@" .. player.Name .. ")",
+                    selectedPlayer == player and COLORS.selected or COLORS.row
                 )
-
-                button.LayoutOrder = count
-                button.TextSize = 12
-
-                button.MouseButton1Click:Connect(
-                    function()
-
-                        if running then
-                            stopFling(true)
-                        end
-
-                        selected = player
-
-                        selectedLabel.Text =
-                            "Target: @" .. player.Name
-
-                        setStatus("Target dipilih")
-
-                        updatePlayers()
-                    end
-                )
+                row.Size = UDim2.new(1, -15, 0, ROW_HEIGHT)
+                row.LayoutOrder = index
+                row.TextSize = 12
+                row.TextXAlignment = Enum.TextXAlignment.Left
+                row.TextTruncate = Enum.TextTruncate.AtEnd
+                -- Destroying the row also disconnects its click handler.
+                row.MouseButton1Click:Connect(function()
+                    if flingRunning then stopFling(true) end
+                    selectedPlayer = player
+                    targetLabel.Text = "Target: @" .. player.Name
+                    setStatus("Target dipilih")
+                    refreshPlayers()
+                end)
             end
         end
     end
-
-    if count == 0 then
-        setStatus("Tidak ada pemain yang cocok")
-    end
+    listCount = index
+    updateCanvas(true)
+    if index == 0 then setStatus("Tidak ada pemain yang cocok") end
 end
 
---==========================================
--- PLAYER & FUNCTION EVENTS
---==========================================
-
-bind(refresh.MouseButton1Click:Connect(
-    updatePlayers
-))
-
-bind(
-    search:GetPropertyChangedSignal(
-        "Text"
-    ):Connect(updatePlayers)
-)
-
-bind(
-    tpButton.MouseButton1Click:Connect(
-        teleportToSelected
-    )
-)
-
-bind(flingButton.MouseButton1Click:Connect(
-    function()
-        if running then
-            stopFling(true)
-            setStatus("Sofa Fling dihentikan")
-        else
-            startFling()
-        end
+listen(refresh.MouseButton1Click:Connect(refreshPlayers))
+listen(search:GetPropertyChangedSignal("Text"):Connect(refreshPlayers))
+listen(Players.PlayerAdded:Connect(refreshPlayers))
+listen(Players.PlayerRemoving:Connect(function(player)
+    if player == selectedPlayer then
+        if flingRunning then stopFling(true) end
+        selectedPlayer = nil
+        targetLabel.Text = "Target: Belum dipilih"
     end
-))
-
-bind(Players.PlayerAdded:Connect(
-    updatePlayers
-))
-
-bind(Players.PlayerRemoving:Connect(
-    function(player)
-        if selected == player then
-            if running then
-                stopFling(true)
-            end
-
-            selected = nil
-
-            selectedLabel.Text =
-                "Target: Belum dipilih"
-        end
-
-        task.defer(updatePlayers)
-    end
-))
-
-bind(LP.CharacterAdded:Connect(function()
-    if running then
-        stopFling(false)
-    end
+    task.defer(refreshPlayers)
 end))
 
---==========================================
--- GUI RESIZE BUTTON EVENTS
---==========================================
-
-bind(shrink.MouseButton1Click:Connect(
-    function()
-        setScale(scale.Scale - 0.10)
-        setStatus(
-            "Ukuran GUI: " ..
-            math.floor(scale.Scale * 100 + 0.5) ..
-            "%"
-        )
-    end
-))
-
-bind(enlarge.MouseButton1Click:Connect(
-    function()
-        setScale(scale.Scale + 0.10)
-        setStatus(
-            "Ukuran GUI: " ..
-            math.floor(scale.Scale * 100 + 0.5) ..
-            "%"
-        )
-    end
-))
-
--- Resize jika ukuran layar berubah
-local function watchCamera(camera)
-    if camera then
-        bind(
-            camera:GetPropertyChangedSignal(
-                "ViewportSize"
-            ):Connect(function()
-                if gui.Parent then
-                    setScale(scale.Scale)
-                end
-            end)
-        )
-    end
-end
-
-watchCamera(workspace.CurrentCamera)
-
---==========================================
--- MINIMIZE / RESTORE
---==========================================
-
-bind(minimize.MouseButton1Click:Connect(
-    function()
-        main.Visible = false
-        floating.Visible = true
-    end
-))
-
-bind(floating.MouseButton1Click:Connect(
-    function()
-        floating.Visible = false
-        main.Visible = true
-    end
-))
-
---==========================================
--- CONFIRM CLOSE
---==========================================
-
-local confirm = Instance.new("Frame")
-confirm.Name = "CloseConfirmation"
-confirm.Size = UDim2.fromScale(1, 1)
-confirm.Position = UDim2.fromScale(0, 0)
-confirm.BackgroundColor3 =
-    Color3.fromRGB(0, 0, 0)
-confirm.BackgroundTransparency = 0.15
-confirm.BorderSizePixel = 0
-confirm.Visible = false
-confirm.Active = true
-confirm.ZIndex = 20
-confirm.Parent = main
-
-corner(confirm, 12)
+--====================================================
+-- CLOSE CONFIRMATION + MINIMIZE
+--====================================================
+local overlay = Instance.new("Frame")
+overlay.Name = "CloseConfirmation"
+overlay.Size = UDim2.fromScale(1, 1)
+overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+overlay.BackgroundTransparency = 0.15
+overlay.BorderSizePixel = 0
+overlay.Visible = false
+overlay.Active = true
+overlay.ZIndex = 20
+overlay.Parent = main
+round(overlay, 12)
 
 local dialog = Instance.new("Frame")
-dialog.Name = "Dialog"
-dialog.Size = UDim2.fromOffset(280, 155)
 dialog.AnchorPoint = Vector2.new(0.5, 0.5)
 dialog.Position = UDim2.fromScale(0.5, 0.5)
-dialog.BackgroundColor3 =
-    Color3.fromRGB(35, 38, 55)
+dialog.Size = UDim2.new(1, -20, 0, 150)
+dialog.BackgroundColor3 = Color3.fromRGB(36, 39, 54)
 dialog.BorderSizePixel = 0
 dialog.ZIndex = 21
-dialog.Parent = confirm
+dialog.Parent = overlay
+round(dialog, 10)
 
-corner(dialog, 12)
+local prompt = Instance.new("TextLabel")
+prompt.Size = UDim2.new(1, -14, 0, 77)
+prompt.Position = UDim2.fromOffset(7, 6)
+prompt.BackgroundTransparency = 1
+prompt.Text = "Yakin ingin menutup\nXLORD V5?"
+prompt.TextColor3 = Color3.new(1, 1, 1)
+prompt.Font = Enum.Font.GothamBold
+prompt.TextSize = 15
+prompt.TextWrapped = true
+prompt.ZIndex = 22
+prompt.Parent = dialog
 
-local message = Instance.new("TextLabel")
-message.Size = UDim2.new(1, -20, 0, 75)
-message.Position = UDim2.fromOffset(10, 5)
-message.BackgroundTransparency = 1
-message.Text = "Yakin ingin menutup\nXLORD V4?"
-message.TextColor3 = Color3.new(1, 1, 1)
-message.TextSize = 16
-message.Font = Enum.Font.GothamBold
-message.TextWrapped = true
-message.ZIndex = 22
-message.Parent = dialog
-
-local yes = makeButton(
-    dialog,
-    "Yes",
-    "YA, TUTUP",
-    UDim2.fromOffset(15, 95),
-    UDim2.fromOffset(120, 40),
-    Color3.fromRGB(205, 55, 65)
-)
+local yes = button(dialog, "ConfirmYes", "YA, TUTUP", COLORS.red)
+local no = button(dialog, "ConfirmNo", "BATAL", COLORS.blue)
+yes.Position = UDim2.new(0, 10, 0, 96)
+yes.Size = UDim2.new(0.5, -15, 0, 38)
 yes.ZIndex = 22
-
-local no = makeButton(
-    dialog,
-    "No",
-    "BATAL",
-    UDim2.fromOffset(145, 95),
-    UDim2.fromOffset(120, 40),
-    Color3.fromRGB(55, 125, 225)
-)
+no.Position = UDim2.new(0.5, 5, 0, 96)
+no.Size = UDim2.new(0.5, -15, 0, 38)
 no.ZIndex = 22
 
-bind(close.MouseButton1Click:Connect(
-    function()
-        confirm.Visible = true
-    end
-))
+listen(close.MouseButton1Click:Connect(function()
+    overlay.Visible = true
+end))
+listen(no.MouseButton1Click:Connect(function()
+    overlay.Visible = false
+end))
+listen(yes.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end))
+listen(minimize.MouseButton1Click:Connect(function()
+    main.Visible = false
+    floating.Visible = true
+end))
 
-bind(no.MouseButton1Click:Connect(
-    function()
-        confirm.Visible = false
-    end
-))
-
-bind(yes.MouseButton1Click:Connect(
-    function()
-        gui:Destroy()
-    end
-))
-
---==========================================
--- DRAGGABLE GUI (PC & MOBILE)
---==========================================
-
-local function makeDraggable(frame, handle)
+--====================================================
+-- DRAG MAIN AND FLOATING BUTTON (touch + mouse).
+--====================================================
+local floatingWasDragged = false
+local function makeDraggable(object, handle, anchorCentered)
     local dragging = false
-    local dragStart = nil
-    local startPos = nil
-    local dragInput = nil
+    local activeInput
+    local startPointer
+    local startAbsolute
 
-    bind(handle.InputBegan:Connect(function(input)
-        if confirm.Visible then
-            return
-        end
-
-        if input.UserInputType ==
-            Enum.UserInputType.MouseButton1
-            or input.UserInputType ==
-            Enum.UserInputType.Touch then
-
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-
-            local ended
-            ended = input.Changed:Connect(function()
-                if input.UserInputState ==
-                    Enum.UserInputState.End then
-
-                    dragging = false
-                    ended:Disconnect()
-                end
-            end)
-        end
+    listen(handle.InputBegan:Connect(function(input)
+        if overlay.Visible then return end
+        if input.UserInputType ~= Enum.UserInputType.Touch
+           and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        dragging = true
+        activeInput = input
+        startPointer = input.Position
+        startAbsolute = object.AbsolutePosition
+        if object == floating then floatingWasDragged = false end
+        local ended
+        ended = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                ended:Disconnect()
+            end
+        end)
     end))
 
-    bind(handle.InputChanged:Connect(function(input)
-        if input.UserInputType ==
-            Enum.UserInputType.MouseMovement
-            or input.UserInputType ==
-            Enum.UserInputType.Touch then
-
-            dragInput = input
-        end
-    end))
-
-    bind(UIS.InputChanged:Connect(function(input)
-        if not dragging
-            or input ~= dragInput
-            or not gui.Parent then
+    listen(UserInputService.InputChanged:Connect(function(input)
+        if not dragging or not gui.Parent then return end
+        if activeInput.UserInputType == Enum.UserInputType.Touch then
+            if input ~= activeInput then return end
+        elseif input.UserInputType ~= Enum.UserInputType.MouseMovement then
             return
         end
-
-        local delta = input.Position - dragStart
-
-        frame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
+        local delta = input.Position - startPointer
+        if object == floating and delta.Magnitude >= 8 then
+            floatingWasDragged = true
+        end
+        local view = viewportSize()
+        local x = startAbsolute.X + delta.X
+        local y = startAbsolute.Y + delta.Y
+        if anchorCentered then
+            x = math.clamp(x + width/2, width/2, math.max(width/2, view.X - width/2))
+            y = math.clamp(y + height/2, height/2, math.max(height/2, view.Y - height/2))
+        else
+            x = math.clamp(x, 0, math.max(0, view.X - object.AbsoluteSize.X))
+            y = math.clamp(y, 0, math.max(0, view.Y - object.AbsoluteSize.Y))
+        end
+        object.Position = UDim2.fromOffset(x, y)
     end))
 end
 
-makeDraggable(main, header)
-makeDraggable(floating, floating)
+makeDraggable(main, header, true)
+makeDraggable(floating, floating, false)
+listen(floating.MouseButton1Click:Connect(function()
+    if floatingWasDragged then return end
+    floating.Visible = false
+    main.Visible = true
+    updateCanvas(false)
+end))
 
---==========================================
--- CLEANUP ON GUI DESTROY
---==========================================
-
+--====================================================
+-- CLEANUP AND RUN
+--====================================================
 gui.Destroying:Connect(function()
     stopFling(true)
-
+    if cameraConnection then cameraConnection:Disconnect() end
     for _, connection in ipairs(connections) do
-        if connection.Connected then
-            connection:Disconnect()
-        end
+        if connection.Connected then connection:Disconnect() end
     end
-
     table.clear(connections)
 end)
 
---==========================================
--- INITIALIZE
---==========================================
-
-updatePlayers()
-
-print("====================================")
-print("XLORD V4 - BROOKHAVEN RP")
-print("Teleport       : READY")
-print("Sofa Fling     : READY")
-print("Resize GUI     : ENABLED")
-print("Minimize GUI   : ENABLED")
-print("Floating Icon  : ENABLED")
-print("Drag GUI       : ENABLED")
-print("Confirm Close  : ENABLED")
-print("====================================")
+refreshPlayers()
+print("[XLORD V5] Loaded: no UIScale, scroll fixed, resize + minimize")
