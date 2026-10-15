@@ -275,18 +275,56 @@ layout.Padding = UDim.new(0, 5)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.Parent = scroll
 
-bind(
-    layout:GetPropertyChangedSignal(
-        "AbsoluteContentSize"
-    ):Connect(function()
 
-        scroll.CanvasSize = UDim2.fromOffset(
-            0,
-            layout.AbsoluteContentSize.Y + 8
-        )
+--==========================================
+-- FIX SCROLL PLAYER LIST
+-- XLORD V4
+--==========================================
 
-    end)
-)
+scroll.Active = true
+scroll.ScrollingEnabled = true
+scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.None
+
+local function updateScrollCanvas()
+    if not scroll.Parent then
+        return
+    end
+
+    local count = 0
+
+    for _, item in ipairs(scroll:GetChildren()) do
+        if item:IsA("TextButton") then
+            count = count + 1
+        end
+    end
+
+    -- Ukuran tiap tombol pemain: 38
+    -- Jarak antar tombol: 5
+    -- Tambahan ruang bawah: 24
+
+    local height =
+        (count * 38) +
+        (math.max(0, count - 1) * 5) +
+        24
+
+    scroll.CanvasSize = UDim2.fromOffset(0, height)
+end
+
+bind(scroll.ChildAdded:Connect(function(child)
+    if child:IsA("TextButton") then
+        task.defer(updateScrollCanvas)
+    end
+end))
+
+bind(scroll.ChildRemoved:Connect(function(child)
+    if child:IsA("TextButton") then
+        task.defer(updateScrollCanvas)
+    end
+end))
+
+updateScrollCanvas()
+
 
 --==========================================
 -- SELECTED PLAYER
