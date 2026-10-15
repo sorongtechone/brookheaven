@@ -1,5 +1,5 @@
 --====================================================
--- XLORD HUB V18 | BROOKHAVEN RP
+-- XLORD HUB V19 | BROOKHAVEN RP
 -- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
@@ -78,7 +78,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V18"
+header.Text = "XLORD | V19"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -158,12 +158,12 @@ targetLabel.Parent = main
 
 local teleport = button(main, "Teleport", "TELEPORT TO PLAYER", COLORS.green)
 local fling = button(main, "SofaFling", "AUTO SOFA : START", COLORS.orange)
-local trampolineButton = button(main, "Trampoline", "TRAMPOLINE DI BAWAH TARGET", COLORS.purple)
+local trampolineButton = button(main, "Trampoline", "TRAMPOLINE NO-CLICK (LOKAL)", COLORS.purple)
 
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V18 siap digunakan"
+status.Text = "XLORD V19 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -242,7 +242,7 @@ local function applySize(newWidth, newHeight)
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V18"
+    header.Text = width < 275 and "XLORD" or "XLORD | V19"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
@@ -308,11 +308,13 @@ watchCamera()
 local selectedPlayer
 
 --====================================================
--- TRAMPOLINE V18: VERIFIED TARGET-GROUND PLACEMENT
--- No blind camera click. If location isn't validated,
--- CANCEL rather than placing the tool somewhere random.
+-- TRAMPOLINE V19: NO CAMERA / NO MOUSE / NO CLICK
+-- Clone the visual geometry of the genuine trampoline tool
+-- and set its position directly beneath the selected target.
+-- Client-only visual preview; NO server placement is claimed.
 --====================================================
 local trampolineBusy = false
+local trampolinePreview = nil
 
 local function isTrampolineTool(instance)
     if not instance or not instance:IsA("Tool") then return false end
@@ -338,11 +340,11 @@ local function getRealTrampoline(character, backpack)
     local folder = ReplicatedStorage:FindFirstChild("RE")
     local remote = folder and folder:FindFirstChild("1Too1l")
     if remote and remote:IsA("RemoteFunction") then
-        setStatus("Mengambil trampoline merah asli...")
+        setStatus("Mengambil item Trampoline asli...")
         local ok, err = pcall(function()
             remote:InvokeServer("PickingTools", "Trampoline")
         end)
-        if not ok then warn("[XLORD V18] Gagal meminta trampoline", err) end
+        if not ok then warn("[XLORD V19] Gagal mengambil Trampoline:", err) end
     end
     for _ = 1, 25 do
         if not gui.Parent or localPlayer.Character ~= character then return nil end
@@ -358,167 +360,92 @@ local function getGroundBelowTarget(target)
     local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
     local targetHum = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
     if not targetRoot or not targetHum or targetHum.Health <= 0 then
-        return nil, "Target belum siap"
+        return nil, "Posisi target belum tersedia"
     end
 
-    -- Ukur permukaan nyata yang ada tepat di bawah kaki target.
-    -- Hindari menjadikan karakter sendiri/target sebagai lantai.
     local feetY = targetRoot.Position.Y - targetHum.HipHeight - targetRoot.Size.Y / 2
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     local ignore = {targetCharacter}
     if localPlayer.Character then table.insert(ignore, localPlayer.Character) end
+    if trampolinePreview then table.insert(ignore, trampolinePreview) end
     params.FilterDescendantsInstances = ignore
     params.RespectCanCollide = true
 
     local origin = Vector3.new(targetRoot.Position.X, feetY + 2.5, targetRoot.Position.Z)
     local hit = workspace:Raycast(origin, Vector3.new(0, -16, 0), params)
     if not hit or hit.Normal.Y < 0.7 then
-        return nil, "Tidak ada lantai datar di bawah target. Spawn dibatalkan"
+        return nil, "Tidak ditemukan lantai di bawah target"
     end
     if feetY - hit.Position.Y > 5 then
-        return nil, "Target terlalu jauh dari lantai. Spawn dibatalkan"
+        return nil, "Target terlalu jauh dari lantai"
     end
     if hit.Position.Y < workspace.FallenPartsDestroyHeight + 30 then
-        return nil, "Area terlalu dekat void. Spawn dibatalkan"
+        return nil, "Target terlalu dekat dengan void"
     end
-    return hit.Position + Vector3.new(0, 0.06, 0)
+    return hit.Position, nil
 end
 
-local function validatedPlacementClick(target, tool, character, hum, point)
-    local cam = workspace.CurrentCamera
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not cam or not root then return false, "Kamera/karakter tidak tersedia" end
-    local mouse = localPlayer:GetMouse()
-    local originalMouseFilter = mouse.TargetFilter
-    local cameraType = cam.CameraType
-    local cameraSubject = cam.CameraSubject
-    local cameraCF = cam.CFrame
-    local cameraFocus = cam.Focus
-    local savedPivot = character:GetPivot()
-    local mainVisible = main.Visible
-    local floatVisible = floating.Visible
-    local restored = false
+local function makeTrampolineVisual(tool)
+    local model = Instance.new("Model")
+    model.Name = "XLORD_Trampoline_LocalPreview"
+    local count = 0
+    local reference = tool:FindFirstChild("Handle")
+    if not reference or not reference:IsA("BasePart") then
+        reference = tool:FindFirstChildWhichIsA("BasePart", true)
+    end
+    if not reference then
+        model:Destroy()
+        return nil, "Item asli tidak memiliki geometri yang bisa ditampilkan"
+    end
 
-    local marker = Instance.new("Part")
-    marker.Name = "XLORD_PlacementPreview"
-    marker.Shape = Enum.PartType.Cylinder
-    marker.Size = Vector3.new(0.12, 3.2, 3.2)
-    marker.CFrame = CFrame.new(point) * CFrame.Angles(0, 0, math.pi / 2)
-    marker.Anchored = true
-    marker.CanCollide = false
-    marker.CanTouch = false
-    marker.CanQuery = false
-    marker.Material = Enum.Material.Neon
-    marker.Color = Color3.fromRGB(90, 255, 145)
-    marker.Transparency = 0.45
-    marker.Parent = workspace
-
-    local function restore()
-        if restored then return end
-        restored = true
-        pcall(function()
-            mouse.TargetFilter = originalMouseFilter
-            cam.CameraType = cameraType
-            cam.CameraSubject = cameraSubject
-            cam.CFrame = cameraCF
-            cam.Focus = cameraFocus
-            main.Visible = mainVisible
-            floating.Visible = floatVisible
-            if localPlayer.Character == character and hum.Health > 0 then
-                character:PivotTo(savedPivot)
-                local ownRoot = character:FindFirstChild("HumanoidRootPart")
-                if ownRoot then
-                    ownRoot.AssemblyLinearVelocity = Vector3.zero
-                    ownRoot.AssemblyAngularVelocity = Vector3.zero
+    local origin = CFrame.new(0, 20, 0)
+    for _, original in ipairs(tool:GetDescendants()) do
+        if original:IsA("BasePart") and count < 80 then
+            local ok, cloned = pcall(function() return original:Clone() end)
+            if ok and cloned then
+                -- Keep only visible geometry, no scripts/welds/input behavior.
+                for _, child in ipairs(cloned:GetDescendants()) do
+                    if child:IsA("Script") or child:IsA("LocalScript")
+                        or child:IsA("ModuleScript") or child:IsA("JointInstance")
+                        or child:IsA("Constraint") or child:IsA("BodyMover") then
+                        child:Destroy()
+                    end
                 end
+                cloned.Anchored = true
+                cloned.CanCollide = false
+                cloned.CanTouch = false
+                cloned.CanQuery = false
+                cloned.AssemblyLinearVelocity = Vector3.zero
+                cloned.AssemblyAngularVelocity = Vector3.zero
+                local relative = reference.CFrame:ToObjectSpace(original.CFrame)
+                if relative.Position.Magnitude > 30 then
+                    relative = CFrame.identity
+                end
+                cloned.CFrame = origin * relative
+                cloned.Parent = model
+                count = count + 1
             end
-        end)
-        marker:Destroy()
+        end
     end
 
-    local didClick = false
-    local validation = "Posisi belum tervalidasi"
-    local ok, err = pcall(function()
-        -- Beberapa tool Brookhaven membatasi jarak tempat meletakkan prop.
-        -- Dekatkan karakter sementara, lalu selalu kembalikan posisi awal.
-        if (root.Position - point).Magnitude > 13 then
-            if hum.Sit then hum.Sit = false end
-            character:PivotTo(CFrame.new(point + Vector3.new(5, 3, 5)))
-            RunService.Heartbeat:Wait()
-            RunService.Heartbeat:Wait()
-        end
-        if (root.Position - point).Magnitude > 15 then
-            validation = "Gagal mendekati titik target, spawn dibatalkan"
-            return
-        end
-        if not gui.Parent or selectedPlayer ~= target or target.Parent ~= Players then
-            validation = "Target berubah, spawn dibatalkan"
-            return
-        end
-        if tool.Parent ~= character then
-            validation = "Item tidak lagi berada di tangan"
-            return
-        end
-
-        -- Sembunyikan menu untuk menghindari intersepsi klik.
-        main.Visible = false
-        floating.Visible = false
-        mouse.TargetFilter = target.Character
-        cam.CameraType = Enum.CameraType.Scriptable
-        cam.CFrame = CFrame.lookAt(point + Vector3.new(3, 10, 6), point)
-        cam.Focus = CFrame.new(point)
-        RunService.RenderStepped:Wait()
-        RunService.RenderStepped:Wait()
-
-        -- Jangan klik buta: Mouse.Hit harus menunjuk dekat titik target.
-        -- Ini menghindari bug V17: trampoline spawn di sembarang tempat.
-        local mouseHit = mouse.Hit.Position
-        local planarError = (Vector3.new(mouseHit.X, 0, mouseHit.Z)
-            - Vector3.new(point.X, 0, point.Z)).Magnitude
-        local verticalError = math.abs(mouseHit.Y - point.Y)
-        if planarError > 2.0 or verticalError > 2.3 then
-            validation = string.format("Aim meleset %.1f studs. Tidak melakukan spawn", planarError)
-            print("[XLORD V18] ABORT bad aim", "target", point, "mouse", mouseHit)
-            return
-        end
-        local latest = getGroundBelowTarget(target)
-        if not latest or (latest - point).Magnitude > 2.5 then
-            validation = "Target berpindah sebelum klik. Spawn dibatalkan"
-            return
-        end
-
-        local view = cam.ViewportSize
-        local x, y = math.floor(view.X / 2), math.floor(view.Y / 2)
-        local vim = game:GetService("VirtualInputManager")
-        vim:SendMouseMoveEvent(x, y, game)
-        RunService.RenderStepped:Wait()
-        vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
-        RunService.RenderStepped:Wait()
-        vim:SendMouseButtonEvent(x, y, 0, false, game, 0)
-        didClick = true
-        validation = string.format("Klik diarahkan ke X %.1f Y %.1f Z %.1f", point.X, point.Y, point.Z)
-        task.wait(0.22)
-    end)
-    restore()
-    if not ok then
-        return false, "Kontrol penempatan ditolak: " .. tostring(err):sub(1, 75)
+    if count == 0 then
+        model:Destroy()
+        return nil, "Geometri trampoline tidak bisa dikloning"
     end
-    return didClick, validation
+    model.Parent = workspace
+    return model, nil
 end
 
-local function placeRealTrampoline()
-    if trampolineBusy then
-        setStatus("Proses trampoline masih berjalan")
-        return
-    end
+local function placeNoClickTrampoline()
+    if trampolineBusy then return end
     local target = selectedPlayer
     if not target or target.Parent ~= Players then
-        setStatus("Pilih pemain dulu")
+        setStatus("Pilih pemain terlebih dahulu")
         return
     end
-    local initial, reason = getGroundBelowTarget(target)
-    if not initial then
+    local firstPoint, reason = getGroundBelowTarget(target)
+    if not firstPoint then
         setStatus(reason)
         return
     end
@@ -526,25 +453,17 @@ local function placeRealTrampoline()
     trampolineBusy = true
     task.spawn(function()
         local character = localPlayer.Character
-        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local backpack = localPlayer:FindFirstChildOfClass("Backpack")
-        if not character or not humanoid or humanoid.Health <= 0 or not backpack then
-            setStatus("Karakter belum siap")
+        if not character or not backpack then
+            setStatus("Karakter / Backpack tidak tersedia")
             trampolineBusy = false
             return
         end
+
         local tool = getRealTrampoline(character, backpack)
-        if not tool or not gui.Parent then
-            setStatus("Trampoline asli tidak ditemukan di inventory")
-            trampolineBusy = false
-            return
-        end
-        local ok, equipError = pcall(function()
-            humanoid:EquipTool(tool)
-        end)
-        if not ok or tool.Parent ~= character then
-            setStatus("Gagal memegang item trampoline")
-            if not ok then warn("[XLORD V18] Equip", equipError) end
+        if not gui.Parent then trampolineBusy = false; return end
+        if not tool then
+            setStatus("Item Trampoline asli tidak ditemukan")
             trampolineBusy = false
             return
         end
@@ -555,15 +474,35 @@ local function placeRealTrampoline()
             trampolineBusy = false
             return
         end
-        setStatus("Mengukur titik di bawah @" .. target.Name .. "...")
-        local clicked, message = validatedPlacementClick(target, tool, character, humanoid, point)
-        setStatus(message)
-        print("[XLORD V18] Trampoline status:", clicked, message)
+
+        -- Direct geometric placement; NEVER sends mouse/keyboard input.
+        local visual, err = makeTrampolineVisual(tool)
+        if not visual then
+            setStatus(err)
+            trampolineBusy = false
+            return
+        end
+        local center, size = visual:GetBoundingBox()
+        local bottomY = center.Position.Y - size.Y / 2
+        local move = Vector3.new(
+            point.X - center.Position.X,
+            point.Y + 0.08 - bottomY,
+            point.Z - center.Position.Z
+        )
+        visual:PivotTo(visual:GetPivot() + move)
+
+        if trampolinePreview then trampolinePreview:Destroy() end
+        trampolinePreview = visual
+        setStatus(string.format(
+            "Preview lokal X:%.1f Y:%.1f Z:%.1f (bukan prop server)",
+            point.X, point.Y, point.Z
+        ))
+        print("[XLORD V19] No-click local trampoline preview below @" .. target.Name, point)
         trampolineBusy = false
     end)
 end
 
-listen(trampolineButton.MouseButton1Click:Connect(placeRealTrampoline))
+listen(trampolineButton.MouseButton1Click:Connect(placeNoClickTrampoline))
 
 --====================================================
 -- LIVE MAP POSITION HUD (own character + selected target)
@@ -1183,7 +1122,7 @@ local prompt = Instance.new("TextLabel")
 prompt.Size = UDim2.new(1, -14, 0, 77)
 prompt.Position = UDim2.fromOffset(7, 6)
 prompt.BackgroundTransparency = 1
-prompt.Text = "Yakin ingin menutup\nXLORD V18?"
+prompt.Text = "Yakin ingin menutup\nXLORD V19?"
 prompt.TextColor3 = Color3.new(1, 1, 1)
 prompt.Font = Enum.Font.GothamBold
 prompt.TextSize = 15
@@ -1280,6 +1219,7 @@ end))
 -- CLEANUP AND RUN
 --====================================================
 gui.Destroying:Connect(function()
+    if trampolinePreview then trampolinePreview:Destroy(); trampolinePreview = nil end
     stopFling(true)
     if cameraConnection then cameraConnection:Disconnect() end
     for _, connection in ipairs(connections) do
@@ -1289,4 +1229,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V18] Loaded: Auto Sofa, Teleport, trampoline placement test, XYZ, resize, minimize")
+print("[XLORD V19] Loaded: Auto Sofa, Teleport, no-click local trampoline preview, XYZ, resize, minimize")
