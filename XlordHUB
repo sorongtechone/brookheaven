@@ -1,5 +1,5 @@
 --====================================================
--- XLORD HUB V13 | BROOKHAVEN RP
+-- XLORD HUB V14 | BROOKHAVEN RP
 -- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
@@ -77,7 +77,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V13"
+header.Text = "XLORD | V14"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -161,7 +161,7 @@ local fling = button(main, "SofaFling", "AUTO SOFA : START", COLORS.orange)
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V13 siap digunakan"
+status.Text = "XLORD V14 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -240,7 +240,7 @@ local function applySize(newWidth, newHeight)
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V13"
+    header.Text = width < 275 and "XLORD" or "XLORD | V14"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
@@ -510,7 +510,7 @@ end
 -- Proses dibatalkan dengan STOP atau jika target tak duduk (8 detik).
 --====================================================
 local MAX_AUTO_WAIT = 8.0
-local AUTO_VOID_Y = -550
+local AUTO_DESTINATION = Vector3.new(52.65, -573, 279.75)
 local AUTO_SIDE_SPEED = 155
 local AUTO_DOWN_SPEED = 140
 local AUTO_SPIN_SPEED = 105
@@ -544,7 +544,12 @@ local function autoMoveSeatAndThrow(target, seat)
     local pose = seat:GetPivot()
     local origin = pose.Position
     local rotation = pose - origin
-    local destination = CFrame.new(origin.X, AUTO_VOID_Y, origin.Z) * rotation
+    -- Pindahkan sofa sambil mengarahkan posisi HumanoidRootPart
+    -- target ke koordinat spesifik yang diminta. Offset duduk
+    -- dipertahankan agar posisi target tidak bergeser dari titik tuju.
+    local seatedRootPosition = beforeRoot and beforeRoot.Position or origin
+    local seatDestinationPosition = origin + (AUTO_DESTINATION - seatedRootPosition)
+    local destination = CFrame.new(seatDestinationPosition) * rotation
 
     -- Arah dorongan diambil dari orientasi sofa, bukan asumsi pusat map.
     local forward = pose.LookVector
@@ -571,10 +576,11 @@ local function autoMoveSeatAndThrow(target, seat)
         seat:ApplyImpulse(velocity * seat.AssemblyMass)
     end)
     if not okThrow then
-        warn("[XLORD V13] Impulse gagal:", tostring(errThrow))
+        warn("[XLORD V14] Impulse gagal:", tostring(errThrow))
     end
-    return true, string.format("Seat TP ke Y=%d dari Y=%.0f; throw=%s",
-        AUTO_VOID_Y, beforeY, okThrow and "dicoba" or "gagal")
+    return true, string.format("Target TP ke X=%.2f Y=%.2f Z=%.2f (awal Y=%.0f); throw=%s",
+        AUTO_DESTINATION.X, AUTO_DESTINATION.Y, AUTO_DESTINATION.Z,
+        beforeY, okThrow and "dicoba" or "gagal")
 end
 
 --====================================================
@@ -762,7 +768,7 @@ local function startFling()
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
 
-        setStatus("Target duduk! Teleport sofa ke Y=-550...")
+        setStatus("Target duduk! TP ke X=52.65 Y=-573 Z=279.75...")
         local okMove, result = autoMoveSeatAndThrow(target, seat)
         if not isCurrent() then return end
         if not okMove then
@@ -784,8 +790,8 @@ local function startFling()
         setStatus("AUTO selesai: " .. result .. " | Sofa lepas, kamu kembali")
         lastAutoTimestamp = os.clock()
         tryRestoreOwnHP(character)
-        print("[XLORD V13] AUTO:", result)
-        print("[XLORD V13] HP dari client tidak menjamin server menerima heal")
+        print("[XLORD V14] AUTO:", result)
+        print("[XLORD V14] HP dari client tidak menjamin server menerima heal")
     end)
 end
 
@@ -914,7 +920,7 @@ local prompt = Instance.new("TextLabel")
 prompt.Size = UDim2.new(1, -14, 0, 77)
 prompt.Position = UDim2.fromOffset(7, 6)
 prompt.BackgroundTransparency = 1
-prompt.Text = "Yakin ingin menutup\nXLORD V13?"
+prompt.Text = "Yakin ingin menutup\nXLORD V14?"
 prompt.TextColor3 = Color3.new(1, 1, 1)
 prompt.Font = Enum.Font.GothamBold
 prompt.TextSize = 15
@@ -1020,4 +1026,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V13] Loaded: Auto Sofa V11 behavior + local HP test, no manual TP, Teleport, XYZ, resize, minimize")
+print("[XLORD V14] Loaded: Auto Sofa V11 behavior + local HP test, no manual TP, Teleport, XYZ, resize, minimize")
