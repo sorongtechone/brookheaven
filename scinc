@@ -1,0 +1,584 @@
+-- XLORD HTTP REQUEST INSPECTOR (Delta / Roblox)
+-- NO hookmetamethod, hookfunction, or native/global interception.
+-- Logs only calls made by code launched with RUN + CAPTURE in this panel.
+-- Shows METHOD, URL, outgoing HEADERS/BODY and (when available) response.
+-- No traffic is uploaded or forwarded to another logging server.
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+local realGame = game
+local nativeLoadstring = loadstring
+local nativeSetfenv = setfenv
+local nativeGetfenv = getfenv
+local nativeGetgenv = getgenv
+local unpackArgs = table.unpack or unpack
+
+local previous = playerGui:FindFirstChild("XLORD_RequestInspector")
+if previous then previous:Destroy() end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "XLORD_RequestInspector"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+
+local function make(class, parent, props)
+    local obj = Instance.new(class)
+    for k, v in pairs(props) do obj[k] = v end
+    obj.Parent = parent
+    return obj
+end
+
+local main = make("Frame", gui, {
+    Size = UDim2.fromOffset(354, 540),
+    Position = UDim2.new(0.5, -177, 0.08, 0),
+    BackgroundColor3 = Color3.fromRGB(22, 25, 35),
+    BorderSizePixel = 0,
+    Active = true
+})
+make("UICorner", main, {CornerRadius = UDim.new(0, 10)})
+local header = make("Frame", main, {
+    Size = UDim2.new(1, 0, 0, 38),
+    BackgroundColor3 = Color3.fromRGB(40, 46, 64),
+    BorderSizePixel = 0,
+    Active = true
+})
+make("TextLabel", header, {
+    Size = UDim2.new(1, -85, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "XLORD HTTP Request Inspector",
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
+    TextColor3 = Color3.fromRGB(240, 245, 255)
+})
+local mini = make("TextButton", header, {
+    Position = UDim2.new(1, -75, 0, 4),
+    Size = UDim2.fromOffset(33, 30),
+    Text = "-", TextSize = 20,
+    BackgroundColor3 = Color3.fromRGB(76, 85, 110),
+    TextColor3 = Color3.new(1, 1, 1)
+})
+local close = make("TextButton", header, {
+    Position = UDim2.new(1, -38, 0, 4),
+    Size = UDim2.fromOffset(33, 30),
+    Text = "X", TextSize = 15,
+    BackgroundColor3 = Color3.fromRGB(171, 52, 60),
+    TextColor3 = Color3.new(1, 1, 1)
+})
+local content = make("Frame", main, {
+    Position = UDim2.fromOffset(0, 40),
+    Size = UDim2.new(1, 0, 1, -40),
+    BackgroundTransparency = 1
+})
+make("TextLabel", content, {
+    Position = UDim2.fromOffset(9, 1),
+    Size = UDim2.new(1, -18, 0, 34),
+    BackgroundTransparency = 1,
+    Text = "Tempel script, RUN, lalu ketuk log untuk detail request/response.",
+    TextWrapped = true, TextSize = 11,
+    TextColor3 = Color3.fromRGB(199, 211, 229)
+})
+local input = make("TextBox", content, {
+    Position = UDim2.fromOffset(9, 37),
+    Size = UDim2.new(1, -18, 0, 77),
+    MultiLine = true, ClearTextOnFocus = false,
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    Font = Enum.Font.Code, TextSize = 12, Text = "",
+    PlaceholderText = 'loadstring(game:HttpGet("https://example.com/script.lua"))()',
+    BackgroundColor3 = Color3.fromRGB(32, 36, 50),
+    TextColor3 = Color3.new(1, 1, 1)
+})
+local run = make("TextButton", content, {
+    Position = UDim2.fromOffset(9, 120),
+    Size = UDim2.new(0.64, -11, 0, 31),
+    Text = "RUN + CAPTURE", Font = Enum.Font.GothamBold,
+    TextSize = 12, BackgroundColor3 = Color3.fromRGB(40, 125, 88),
+    TextColor3 = Color3.new(1, 1, 1)
+})
+local clear = make("TextButton", content, {
+    Position = UDim2.new(0.64, 4, 0, 120),
+    Size = UDim2.new(0.36, -13, 0, 31),
+    Text = "CLEAR", TextSize = 12,
+    BackgroundColor3 = Color3.fromRGB(127, 65, 69),
+    TextColor3 = Color3.new(1, 1, 1)
+})
+local status = make("TextLabel", content, {
+    Position = UDim2.fromOffset(9, 154),
+    Size = UDim2.new(1, -18, 0, 21),
+    Text = "Ready | Proxy mode, no native hooks",
+    TextColor3 = Color3.fromRGB(116, 231, 159),
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    BackgroundTransparency = 1
+})
+local scroll = make("ScrollingFrame", content, {
+    Position = UDim2.fromOffset(9, 181),
+    Size = UDim2.new(1, -18, 0, 114),
+    CanvasSize = UDim2.fromOffset(0, 0),
+    ScrollBarThickness = 4, BorderSizePixel = 0,
+    BackgroundColor3 = Color3.fromRGB(30, 34, 47)
+})
+local list = make("UIListLayout", scroll, {
+    Padding = UDim.new(0, 3),
+    SortOrder = Enum.SortOrder.LayoutOrder
+})
+list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scroll.CanvasSize = UDim2.fromOffset(0, list.AbsoluteContentSize.Y + 8)
+end)
+make("TextLabel", content, {
+    Position = UDim2.fromOffset(9, 298),
+    Size = UDim2.new(1, -18, 0, 21),
+    Text = "DETAIL - pilih request di atas",
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextColor3 = Color3.fromRGB(225, 231, 247),
+    TextSize = 11, Font = Enum.Font.GothamBold,
+    BackgroundTransparency = 1
+})
+local detailsFrame = make("ScrollingFrame", content, {
+    Position = UDim2.fromOffset(9, 323),
+    Size = UDim2.new(1, -18, 0, 115),
+    CanvasSize = UDim2.fromOffset(0, 0),
+    ScrollBarThickness = 4,
+    BorderSizePixel = 0,
+    BackgroundColor3 = Color3.fromRGB(32, 36, 49)
+})
+local detailText = make("TextLabel", detailsFrame, {
+    Position = UDim2.fromOffset(5, 5),
+    Size = UDim2.new(1, -16, 0, 105),
+    BackgroundTransparency = 1,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = true,
+    TextSize = 11,
+    Font = Enum.Font.Code,
+    TextColor3 = Color3.fromRGB(218, 231, 247),
+    Text = "Method, URL, headers, body, status dan response akan muncul di sini."
+})
+local copyURL = make("TextButton", content, {
+    Position = UDim2.fromOffset(9, 446),
+    Size = UDim2.new(0.49, -9, 0, 30),
+    Text = "COPY URL", TextSize = 11,
+    BackgroundColor3 = Color3.fromRGB(61, 84, 121),
+    TextColor3 = Color3.new(1, 1, 1)
+})
+local copyDetails = make("TextButton", content, {
+    Position = UDim2.new(0.5, 0, 0, 446),
+    Size = UDim2.new(0.5, -9, 0, 30),
+    Text = "COPY DETAIL", TextSize = 11,
+    BackgroundColor3 = Color3.fromRGB(61, 84, 121),
+    TextColor3 = Color3.new(1, 1, 1)
+})
+
+local alive, running = true, false
+local records, rows, selected = {}, {}, nil
+local count = 0
+local MAX_RECORDS = 50
+local MAX_BODY = 5000
+local MAX_RESPONSE = 2500
+
+local function clip(value, maxLen)
+    if value == nil then return "(tidak ada)" end
+    local str = tostring(value)
+    if #str > maxLen then
+        return str:sub(1, maxLen) .. "\n...[DIPOTONG: " .. #str .. " karakter]"
+    end
+    return str
+end
+
+local function headerText(h)
+    if type(h) ~= "table" then return "(tidak ada)" end
+    local keys = {}
+    for k in pairs(h) do keys[#keys + 1] = k end
+    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+    local out = {}
+    for _, k in ipairs(keys) do
+        local name = tostring(k)
+        local sensitive = name:lower():find("authorization", 1, true)
+            or name:lower():find("cookie", 1, true)
+            or name:lower():find("api%-key")
+            or name:lower():find("token", 1, true)
+        out[#out + 1] = name .. ": " .. (sensitive and "[REDACTED]" or clip(h[k], 500))
+    end
+    if #out == 0 then return "(tidak ada)" end
+    return table.concat(out, "\n")
+end
+
+local function asDetails(rec)
+    local t = {
+        "METHOD: " .. rec.method,
+        "URL: " .. rec.url,
+        "SOURCE: " .. rec.source,
+        "",
+        "=== REQUEST HEADERS ===",
+        headerText(rec.headers),
+        "",
+        "=== REQUEST BODY / PAYLOAD ===",
+        clip(rec.body, MAX_BODY),
+        "",
+        "=== RESPONSE ===",
+        "Status: " .. tostring(rec.status or "(belum ada)"),
+        "Headers:\n" .. headerText(rec.responseHeaders),
+        "Body:\n" .. clip(rec.responseBody, MAX_RESPONSE),
+    }
+    if rec.err then
+        t[#t + 1] = "ERROR: " .. clip(rec.err, 500)
+    end
+    return table.concat(t, "\n")
+end
+
+local function showRecord(rec)
+    selected = rec
+    local txt = asDetails(rec)
+    detailText.Text = txt
+    local lines = 1
+    for _ in txt:gmatch("\n") do lines = lines + 1 end
+    local y = math.max(110, math.min(6000, math.ceil(#txt / 37 + lines) * 13))
+    detailText.Size = UDim2.new(1, -16, 0, y)
+    detailsFrame.CanvasSize = UDim2.fromOffset(0, y + 10)
+    detailsFrame.CanvasPosition = Vector2.new(0, 0)
+end
+
+local function addRequest(method, url, headers, body, source)
+    count = count + 1
+    local rec = {
+        id = count,
+        method = tostring(method or "GET"):upper(),
+        url = tostring(url or ""),
+        headers = headers,
+        body = body == nil and nil or clip(body, MAX_BODY),
+        source = source or "unknown"
+    }
+    records[#records + 1] = rec
+    if alive and gui.Parent then
+        local row = make("TextButton", scroll, {
+            Size = UDim2.new(1, -5, 0, 47),
+            LayoutOrder = count,
+            Text = "[" .. count .. "] " .. rec.method .. "  " .. clip(rec.url, 92) .. "\nTAP UNTUK DETAIL",
+            TextWrapped = true,
+            Font = Enum.Font.Code, TextSize = 10,
+            BackgroundColor3 = Color3.fromRGB(45, 52, 70),
+            TextColor3 = Color3.fromRGB(125, 242, 171)
+        })
+        row.MouseButton1Click:Connect(function() showRecord(rec) end)
+        rows[#rows + 1] = row
+        status.Text = "Captured: " .. count .. " request(s)"
+        if not selected then showRecord(rec) end
+    end
+    if #records > MAX_RECORDS then
+        local removed = table.remove(records, 1)
+        if selected == removed then selected = nil end
+    end
+    if #rows > MAX_RECORDS then
+        local old = table.remove(rows, 1)
+        old:Destroy()
+    end
+    return rec
+end
+
+local function updateResponse(rec, response, err)
+    if err then rec.err = tostring(err) end
+    if type(response) == "string" then
+        rec.status = err and "ERROR" or "(tidak tersedia untuk API ini)"
+        rec.responseBody = clip(response, MAX_RESPONSE)
+    elseif type(response) == "table" then
+        rec.status = response.StatusCode or response.Status or response.status_code
+        rec.responseHeaders = response.Headers or response.headers
+        rec.responseBody = clip(response.Body or response.body, MAX_RESPONSE)
+    end
+    if alive and selected == rec then showRecord(rec) end
+end
+
+local function packResults(...)
+    return {n = select("#", ...), ...}
+end
+
+local function safeCall(rec, fn, ...)
+    -- Forward the original request exactly once and preserve all return values.
+    local results = packResults(pcall(fn, ...))
+    if not results[1] then
+        updateResponse(rec, nil, results[2])
+        error(results[2], 0)
+    end
+    updateResponse(rec, results[2])
+    return unpackArgs(results, 2, results.n)
+end
+
+local function nativeGlobal(name)
+    local base = (type(nativeGetfenv) == "function" and nativeGetfenv(0)) or _G
+    if type(base) == "table" and type(base[name]) == "function" then return base[name] end
+    if type(nativeGetgenv) == "function" then
+        local ok, global = pcall(nativeGetgenv)
+        if ok and type(global) == "table" and type(global[name]) == "function" then
+            return global[name]
+        end
+    end
+    return nil
+end
+
+local function createEnvironment()
+    local base = (type(nativeGetfenv) == "function" and nativeGetfenv(0)) or _G
+    local globals = base
+    if type(nativeGetgenv) == "function" then
+        local ok, global = pcall(nativeGetgenv)
+        if ok and type(global) == "table" then globals = global end
+    end
+    local env = {}
+    local gameProxy, httpProxy
+
+    local function wrapRequest(original, label)
+        return function(options)
+            if type(options) ~= "table" then
+                return original(options)
+            end
+            local method = options.Method or options.method or "GET"
+            local url = options.Url or options.url or ""
+            local headers = options.Headers or options.headers
+            local body = options.Body or options.body
+            local rec = addRequest(method, url, headers, body, label)
+            return safeCall(rec, original, options)
+        end
+    end
+
+    local requestFunction = nativeGlobal("request")
+    local httpRequestFunction = nativeGlobal("http_request")
+    if requestFunction then env.request = wrapRequest(requestFunction, "request") end
+    if httpRequestFunction then env.http_request = wrapRequest(httpRequestFunction, "http_request") end
+
+    local function wrapNamespace(ns, name)
+        if type(ns) ~= "table" then return ns end
+        return setmetatable({}, {
+            __index = function(_, key)
+                if key == "request" and type(ns.request) == "function" then
+                    return wrapRequest(ns.request, name .. ".request")
+                end
+                return ns[key]
+            end,
+            __newindex = function(_, key, val) ns[key] = val end
+        })
+    end
+    if globals.syn or base.syn then env.syn = wrapNamespace(globals.syn or base.syn, "syn") end
+    if globals.http or base.http then env.http = wrapNamespace(globals.http or base.http, "http") end
+
+    local realHttp = realGame:GetService("HttpService")
+    httpProxy = setmetatable({}, {
+        __index = function(_, key)
+            if key == "RequestAsync" then
+                return function(_, options)
+                    local rec = addRequest(
+                        options.Method or "GET", options.Url or "",
+                        options.Headers, options.Body, "HttpService:RequestAsync"
+                    )
+                    return safeCall(rec, function()
+                        return realHttp:RequestAsync(options)
+                    end)
+                end
+            elseif key == "GetAsync" then
+                return function(_, url, ...)
+                    local rec = addRequest("GET", url, nil, nil, "HttpService:GetAsync")
+                    return safeCall(rec, realHttp.GetAsync, realHttp, url, ...)
+                end
+            elseif key == "PostAsync" then
+                return function(_, url, body, ...)
+                    local rec = addRequest("POST", url, nil, body, "HttpService:PostAsync")
+                    return safeCall(rec, realHttp.PostAsync, realHttp, url, body, ...)
+                end
+            end
+            local value = realHttp[key]
+            if type(value) == "function" then
+                return function(first, ...)
+                    if first == httpProxy or first == realHttp then
+                        return value(realHttp, ...)
+                    end
+                    return value(realHttp, first, ...)
+                end
+            end
+            return value
+        end,
+        __tostring = function() return tostring(realHttp) end
+    })
+
+    gameProxy = setmetatable({}, {
+        __index = function(_, key)
+            if key == "HttpGet" or key == "HttpGetAsync" then
+                return function(selfOrUrl, ...)
+                    local args = {...}
+                    local url
+                    if selfOrUrl == gameProxy or selfOrUrl == realGame then
+                        url = table.remove(args, 1)
+                    else
+                        url = selfOrUrl
+                    end
+                    local rec = addRequest("GET", url, nil, nil, "game:" .. key)
+                    if key == "HttpGetAsync" then
+                        return safeCall(rec, function()
+                            return realGame:HttpGetAsync(url, unpackArgs(args))
+                        end)
+                    end
+                    return safeCall(rec, function()
+                        return realGame:HttpGet(url, unpackArgs(args))
+                    end)
+                end
+            elseif key == "GetService" or key == "FindService" then
+                return function(first, ...)
+                    local serviceName
+                    if first == gameProxy or first == realGame then
+                        serviceName = select(1, ...)
+                    else
+                        serviceName = first
+                    end
+                    if serviceName == "HttpService" then return httpProxy end
+                    if key == "GetService" then
+                        return realGame:GetService(serviceName)
+                    end
+                    return realGame:FindService(serviceName)
+                end
+            end
+            local value = realGame[key]
+            if type(value) == "function" then
+                return function(first, ...)
+                    if first == gameProxy or first == realGame then
+                        return value(realGame, ...)
+                    end
+                    return value(realGame, first, ...)
+                end
+            end
+            return value
+        end,
+        __tostring = function() return tostring(realGame) end
+    })
+
+    env.game = gameProxy
+    env.loadstring = function(source, ...)
+        local fn, err = nativeLoadstring(source, ...)
+        if not fn then return nil, err end
+        local ok, setErr = pcall(nativeSetfenv, fn, env)
+        if not ok then return nil, tostring(setErr) end
+        return fn
+    end
+    setmetatable(env, {
+        __index = function(_, key)
+            local v = base[key]
+            if v == nil and globals ~= base then v = globals[key] end
+            return v
+        end
+    })
+    -- Preserve global variable reads/writes as far as possible, while
+    -- exposing proxy request helpers to code using getgenv().
+    if type(nativeGetgenv) == "function" then
+        local genvProxy = setmetatable({}, {
+            __index = function(_, key)
+                local val = env[key]
+                if val ~= nil then return val end
+                return globals[key]
+            end,
+            __newindex = function(_, key, value) globals[key] = value end
+        })
+        env.getgenv = function() return genvProxy end
+    end
+    return env
+end
+
+local function copyToClipboard(txt)
+    if type(setclipboard) ~= "function" then
+        status.Text = "Clipboard tidak tersedia"
+        return
+    end
+    local ok = pcall(setclipboard, txt)
+    status.Text = ok and "Berhasil disalin" or "Gagal menyalin"
+end
+copyURL.MouseButton1Click:Connect(function()
+    if selected then copyToClipboard(selected.url) end
+end)
+copyDetails.MouseButton1Click:Connect(function()
+    if selected then copyToClipboard(asDetails(selected)) end
+end)
+clear.MouseButton1Click:Connect(function()
+    for _, row in ipairs(rows) do row:Destroy() end
+    rows, records, selected = {}, {}, nil
+    count = 0
+    detailText.Text = "Belum ada request."
+    detailsFrame.CanvasSize = UDim2.fromOffset(0, 0)
+    status.Text = "Log dibersihkan"
+end)
+
+run.MouseButton1Click:Connect(function()
+    if running then return end
+    if type(nativeLoadstring) ~= "function" or type(nativeSetfenv) ~= "function" then
+        status.Text = "loadstring/setfenv tidak didukung Delta"
+        return
+    end
+    local source = input.Text
+    if source:match("^%s*$") then
+        status.Text = "Masukkan script Lua dulu"
+        return
+    end
+    local chunk, err = nativeLoadstring(source)
+    if not chunk then
+        status.Text = "Syntax error: " .. tostring(err):sub(1, 70)
+        return
+    end
+    local env = createEnvironment()
+    local ok, setErr = pcall(nativeSetfenv, chunk, env)
+    if not ok then
+        status.Text = "Env error: " .. tostring(setErr):sub(1, 70)
+        return
+    end
+    running = true
+    run.Text = "RUNNING..."
+    status.Text = "Running | Request capture active"
+    task.spawn(function()
+        local worked, result = pcall(chunk)
+        running = false
+        if alive then
+            run.Text = "RUN + CAPTURE"
+            if worked then
+                status.Text = "Selesai | " .. count .. " request(s)"
+            else
+                status.Text = "Script error: " .. tostring(result):sub(1, 75)
+                warn("[XLORD Inspector] " .. tostring(result))
+            end
+        end
+    end)
+end)
+
+local collapsed = false
+mini.MouseButton1Click:Connect(function()
+    collapsed = not collapsed
+    content.Visible = not collapsed
+    main.Size = collapsed and UDim2.fromOffset(354, 38)
+        or UDim2.fromOffset(354, 540)
+    mini.Text = collapsed and "+" or "-"
+end)
+
+local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
+header.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.Touch or
+       inp.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragInput = inp
+        dragStart = inp.Position
+        startPos = main.Position
+        inp.Changed:Connect(function()
+            if inp.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+local moveConn = UIS.InputChanged:Connect(function(inp)
+    if not dragging or not dragStart then return end
+    if dragInput.UserInputType == Enum.UserInputType.Touch then
+        if inp ~= dragInput then return end
+    elseif inp.UserInputType ~= Enum.UserInputType.MouseMovement then
+        return
+    end
+    local delta = inp.Position - dragStart
+    main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+        startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end)
+gui.Destroying:Connect(function()
+    alive = false
+    if moveConn then moveConn:Disconnect() end
+end)
+close.MouseButton1Click:Connect(function() gui:Destroy() end)
+print("[XLORD] HTTP Request Inspector ready (proxy only; no native hooks)")
