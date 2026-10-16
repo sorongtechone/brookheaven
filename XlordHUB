@@ -664,7 +664,7 @@ end
 -- Proses dibatalkan dengan STOP atau jika target tak duduk (8 detik).
 --====================================================
 local MAX_AUTO_WAIT = 8.0
-local AUTO_DESTINATION = Vector3.new(52.65, -573, 279.75)
+local AUTO_DESTINATION = Vector3.new(-77817, 28186, 9001)
 local AUTO_SIDE_SPEED = 155
 local AUTO_DOWN_SPEED = 140
 local AUTO_SPIN_SPEED = 105
