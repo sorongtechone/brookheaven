@@ -1,14 +1,9 @@
-
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
-
--- Remove old version before creating a new one.
 local previous = playerGui:FindFirstChild("XLORD_Teleport")
 if previous then previous:Destroy() end
 
