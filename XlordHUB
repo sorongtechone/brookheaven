@@ -657,7 +657,7 @@ local function teleportToSelected()
     end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if humanoid then humanoid.Sit = false end
-    character:PivotTo(theirRoot.CFrame * CFrame.new(0, -1, 2))
+    character:PivotTo(theirRoot.CFrame * CFrame.new(0, -2, 1))
     setStatus("Teleport ke @" .. selectedPlayer.Name)
 end
 
