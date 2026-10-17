@@ -1,10 +1,18 @@
+--====================================================
+-- XLORD HUB V22 | BROOKHAVEN RP
+-- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
+-- Scroll fix: no UIScale; explicit content height
+--====================================================
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+-- Remove old version before creating a new one.
 local previous = playerGui:FindFirstChild("XLORD_Teleport")
 if previous then previous:Destroy() end
 
@@ -1168,6 +1176,17 @@ end))
 
 
 --====================================================
+-- PROP FOLLOW CONFIG (RESTORED FROM V3)
+--====================================================
+local SEND_INTERVAL = 0.07
+local MIN_MOVEMENT = 0.10
+local BASE_PREDICTION = 0.10
+local MAX_PREDICTION = 0.30
+local MAX_VELOCITY = 40
+local ERROR_DELAY = 0.20
+local MAX_ERRORS = 5
+
+--====================================================
 -- PROP FOLLOW ENGINE STATE
 --====================================================
 local selectedProp = nil
@@ -1383,11 +1402,8 @@ end
 --------------------------------------------------
 
 local function scanProps()
-    -- Logika scan dikembalikan ke pola V3 yang sebelumnya terasa lebih cepat.
-    -- Periksa folder prop yang dikenal sekali, tanpa fast-path lalu scan ulang.
-    local found = {}
+    local ownedFound, fallbackFound = {}, {}
     local seen = {}
-
     local username = localPlayer.Name:lower()
     local ownedName = "prop" .. username
 
@@ -1398,39 +1414,43 @@ local function scanProps()
     }
 
     local function inspect(obj)
-        if not obj:IsA("Model") and not obj:IsA("BasePart") then
+        if not (obj:IsA("Model") or obj:IsA("BasePart")) then
             return
         end
+        if seen[obj] then return end
 
         local name = obj.Name:lower()
-        local owned = name == ownedName or
-            (name:find("prop", 1, true) and name:find(username, 1, true))
-
-        if not owned then
-            return
-        end
-
         local remote = obj:FindFirstChild("SetCurrentCFrame", true)
         if not remote or not remote:IsA("RemoteFunction") then
             return
         end
 
-        if not seen[obj] then
-            seen[obj] = true
-            table.insert(found, { object = obj, remote = remote })
+        seen[obj] = true
+        local entry = { object = obj, remote = remote }
+        local ownerMatch = name == ownedName
+            or (name:find("prop", 1, true) and name:find(username, 1, true))
+        if ownerMatch then
+            table.insert(ownedFound, entry)
+        elseif name:find("prop", 1, true) then
+            table.insert(fallbackFound, entry)
         end
     end
 
     for _, folder in ipairs(folders) do
         if folder then
-            inspect(folder)
             for _, obj in ipairs(folder:GetDescendants()) do
                 inspect(obj)
             end
+            inspect(folder)
         end
     end
 
-    return found
+    -- Prefer confirmed owner-name matches. If Brookhaven changes the naming
+    -- convention, return prop-named candidates so the user can choose manually.
+    if #ownedFound > 0 then
+        return ownedFound, false
+    end
+    return fallbackFound, #fallbackFound > 0
 end
 --------------------------------------------------
 -- HITUNG POSISI BAWAH PROP
@@ -1507,11 +1527,15 @@ propBind(propBtn.MouseButton1Click, function()
 
     notify("Scanning prop...")
 
-    local found = scanProps()
+    local found, fallbackScan = scanProps()
 
     if #found == 0 then
         notify("Prop tidak ditemukan. Spawn manual dahulu.")
         return
+    end
+
+    if fallbackScan then
+        notify("Prop pemilik tidak terdeteksi dari nama; pilih kandidat prop yang sesuai")
     end
 
     if #found == 1 then
@@ -1632,6 +1656,10 @@ local function calculatePosition(root)
     )
 end
 
+--------------------------------------------------
+-- FAST FOLLOW LOOP
+--------------------------------------------------
+
 local function followLoop(myToken)
     local lastPosition = nil
     local lastStatus = 0
@@ -1718,7 +1746,7 @@ local function followLoop(myToken)
 
                     notify(
                         "FOLLOW KAKI: @" ..
-                        propTarget.Name
+                        (propTarget and propTarget.Name or "target")
                     )
 
                     updateStats()
@@ -1810,7 +1838,7 @@ local function startFollow()
 
     notify(
         "FAST FOLLOW FEET: @" ..
-        propTarget.Name
+        (propTarget and propTarget.Name or "target")
     )
 
     local myToken = token
