@@ -1,5 +1,5 @@
 --====================================================
--- XLORD HUB V21 | BROOKHAVEN RP
+-- XLORD HUB V22 | BROOKHAVEN RP
 -- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
@@ -70,7 +70,7 @@ main.AnchorPoint = Vector2.new(0.5, 0.5)
 main.Position = UDim2.fromScale(0.5, 0.5)
 main.Size = UDim2.fromOffset(320, 490)
 main.BackgroundColor3 = COLORS.panel
-main.BackgroundTransparency = 0.18 -- sedikit transparan
+main.BackgroundTransparency = 0.16
 main.BorderSizePixel = 0
 main.Active = true
 main.Parent = gui
@@ -79,7 +79,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V21"
+header.Text = "XLORD | V22"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -91,6 +91,7 @@ local smaller = button(main, "Smaller", "-", COLORS.field)
 local larger = button(main, "Larger", "+", COLORS.blue)
 local minimize = button(main, "Minimize", "_", COLORS.green)
 local close = button(main, "Close", "X", COLORS.red)
+local propModeButton = button(main, "PropMode", "PROP", COLORS.purple)
 
 local floating = button(gui, "FloatingXL", "XL", COLORS.blue)
 floating.Size = UDim2.fromOffset(44, 44)
@@ -164,7 +165,7 @@ local trampolineButton = button(main, "Trampoline", "TRAMPOLINE ASLI (TEST)", Co
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V21 siap digunakan"
+status.Text = "XLORD V22 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -242,12 +243,14 @@ local function applySize(newWidth, newHeight)
 
     main.Size = UDim2.fromOffset(width, height)
     header.Position = UDim2.fromOffset(12, 0)
-    header.Size = UDim2.fromOffset(math.max(65, width - 163), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V21"
+    header.Size = UDim2.fromOffset(math.max(65, width - 198), 42)
+    header.Text = width < 275 and "XLORD" or "XLORD | V22"
 
     local sizeBtn = 30
     smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
     minimize.Size, close.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
+    propModeButton.Size = UDim2.fromOffset(30, 30)
+    propModeButton.Position = UDim2.fromOffset(width - 178, 6)
     smaller.Position = UDim2.fromOffset(width - 144, 6)
     larger.Position = UDim2.fromOffset(width - 110, 6)
     minimize.Position = UDim2.fromOffset(width - 76, 6)
@@ -307,6 +310,7 @@ watchCamera()
 -- TELEPORT AND SOFA FLING
 --====================================================
 local selectedPlayer
+local propTarget = nil
 
 --====================================================
 -- V21: GENUINE BROOKHAVEN TRAMPOLINE TOOL EXPERIMENT
@@ -1022,8 +1026,7 @@ local function refreshPlayers()
                 row.MouseButton1Click:Connect(function()
                     if flingRunning then stopFling(true) end
                     selectedPlayer = player
-                    local sharedEnv = (getgenv and getgenv()) or _G
-                    sharedEnv.XLORD_SHARED_TARGET = player
+                    propTarget = player
                     targetLabel.Text = "Target: @" .. player.Name
                     setStatus("Target dipilih")
                     refreshPlayers()
@@ -1043,8 +1046,7 @@ listen(Players.PlayerRemoving:Connect(function(player)
     if player == selectedPlayer then
         if flingRunning then stopFling(true) end
         selectedPlayer = nil
-        local sharedEnv = (getgenv and getgenv()) or _G
-        sharedEnv.XLORD_SHARED_TARGET = nil
+        propTarget = nil
         targetLabel.Text = "Target: Belum dipilih"
     end
     task.defer(refreshPlayers)
@@ -1103,10 +1105,6 @@ listen(no.MouseButton1Click:Connect(function()
     overlay.Visible = false
 end))
 listen(yes.MouseButton1Click:Connect(function()
-    local sharedEnv = (getgenv and getgenv()) or _G
-    if sharedEnv.XLORD_PROP_CLEANUP then
-        pcall(sharedEnv.XLORD_PROP_CLEANUP)
-    end
     gui:Destroy()
 end))
 listen(minimize.MouseButton1Click:Connect(function()
@@ -1176,245 +1174,142 @@ listen(floating.MouseButton1Click:Connect(function()
     updateCanvas(false)
 end))
 
---====================================================
--- CLEANUP AND RUN
---====================================================
-gui.Destroying:Connect(function()
-    if trampolinePreview then trampolinePreview:Destroy(); trampolinePreview = nil end
-    stopFling(true)
-    if cameraConnection then cameraConnection:Disconnect() end
-    for _, connection in ipairs(connections) do
-        if connection.Connected then connection:Disconnect() end
-    end
-    table.clear(connections)
-end)
-
-refreshPlayers()
-print("[XLORD V21] Loaded: Auto Sofa, Teleport, genuine server trampoline activation TEST, XYZ, resize, minimize")
 
 --====================================================
--- XLORD PROP CONTROLLER V3 | TERGABUNG
+-- PROP FOLLOW ENGINE STATE
 --====================================================
-
-
---[[
-    XLORD PROP CONTROLLER V3
-    BROOKHAVEN | FAST FOLLOW FEET
-
-    FITUR:
-    - Scan prop yang sudah di-spawn
-    - Pilih target pemain
-    - Follow posisi kaki
-    - Posisi bawah prop sejajar kaki
-    - Velocity prediction
-    - Latency compensation
-    - Update interval 70ms
-    - Pengaturan offset tinggi
-    - Floating GUI
-    - ON / OFF
-    - Remote SetCurrentCFrame
-
-    Tidak menggunakan PivotTo lokal.
-]]
-
---------------------------------------------------
--- SERVICES
---------------------------------------------------
-
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-
-local LP = Players.LocalPlayer
-local PG = LP:WaitForChild("PlayerGui")
-
-local env = getgenv and getgenv() or _G
-
-if env.XLORD_PROP_CLEANUP then
-    pcall(env.XLORD_PROP_CLEANUP)
-end
-
---------------------------------------------------
--- CONFIG
---------------------------------------------------
-
-local SEND_INTERVAL = 0.07
-local MIN_MOVEMENT = 0.10
-
-local BASE_PREDICTION = 0.10
-local MAX_PREDICTION = 0.30
-
-local MAX_VELOCITY = 40
-local ERROR_DELAY = 0.20
-local MAX_ERRORS = 5
-
---------------------------------------------------
--- STATE
---------------------------------------------------
-
-local target = nil
 local selectedProp = nil
 local selectedRemote = nil
-
 local rotation = CFrame.new()
 local bottomOffset = 0
-
 local running = false
-local alive = true
+local propAlive = true
 local token = 0
-
 local lastRTT = 0
 local successCount = 0
 local errorCount = 0
+local propConnections = {}
 
-local connections = {}
 
-local function bind(signal, callback)
-    local connection = signal:Connect(callback)
-    table.insert(connections, connection)
-    return connection
-end
+--====================================================
+-- XLORD V22 PROP FOLLOW PANEL (INTEGRATED; NO SECOND GUI)
+--====================================================
+local propPanel = Instance.new("Frame")
+propPanel.Name = "PropFollowPanel"
+propPanel.Size = UDim2.new(1, -20, 1, -52)
+propPanel.Position = UDim2.fromOffset(10, 44)
+propPanel.BackgroundColor3 = COLORS.panel
+propPanel.BackgroundTransparency = 0.08
+propPanel.BorderSizePixel = 0
+propPanel.Visible = false
+propPanel.ZIndex = 10
+propPanel.Parent = main
+round(propPanel, 9)
 
---------------------------------------------------
--- GUI
---------------------------------------------------
+local propTitle = Instance.new("TextLabel")
+propTitle.Size = UDim2.new(1, -20, 0, 26)
+propTitle.Position = UDim2.fromOffset(10, 5)
+propTitle.BackgroundTransparency = 1
+propTitle.Text = "FAST FOLLOW FEET | PROP"
+propTitle.TextColor3 = Color3.new(1,1,1)
+propTitle.TextSize = 13
+propTitle.Font = Enum.Font.GothamBold
+propTitle.TextXAlignment = Enum.TextXAlignment.Left
+propTitle.ZIndex = 11
+propTitle.Parent = propPanel
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "XLORD_FastFeet_V3"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = false
-gui.Parent = PG
-
-local frame = Instance.new("Frame")
-frame.Name = "Main"
-frame.Size = UDim2.fromOffset(310, 360)
-frame.Position = UDim2.new(
-    0.5, -155,
-    0.4, -120
-)
-
-frame.BackgroundColor3 =
-    Color3.fromRGB(24, 27, 38)
-frame.BackgroundTransparency = 0.18 -- sedikit transparan
-
-frame.Active = true
-frame.Draggable = true
-frame.Parent = gui
-
-Instance.new("UICorner", frame).CornerRadius =
-    UDim.new(0, 12)
-
-local function make(class, str, y, height)
+local function propMake(class, name, caption, y, h, color)
     local obj = Instance.new(class)
-
-    obj.Size = UDim2.new(
-        1, -24, 0, height
-    )
-
-    obj.Position = UDim2.fromOffset(
-        12, y
-    )
-
-    obj.BackgroundColor3 =
-        Color3.fromRGB(45, 50, 68)
-
-    obj.Text = str
-    obj.TextColor3 =
-        Color3.new(1, 1, 1)
-
-    obj.TextSize = 13
+    obj.Name = name
+    obj.Size = UDim2.new(1, -20, 0, h)
+    obj.Position = UDim2.fromOffset(10, y)
+    obj.BackgroundColor3 = color or COLORS.field
+    obj.BorderSizePixel = 0
+    obj.Text = caption
+    obj.TextColor3 = Color3.new(1,1,1)
+    obj.TextSize = 12
     obj.Font = Enum.Font.GothamBold
-    obj.Parent = frame
-
+    obj.ZIndex = 11
+    obj.Parent = propPanel
     if class == "TextLabel" then
         obj.BackgroundTransparency = 1
+        obj.TextXAlignment = Enum.TextXAlignment.Left
     else
-        Instance.new("UICorner", obj).CornerRadius =
-            UDim.new(0, 7)
+        round(obj, 7)
     end
-
     return obj
 end
 
-make(
-    "TextLabel",
-    "XLORD | FAST FOLLOW FEET V3",
-    5, 30
-)
-
-local playerBtn = make(
-    "TextButton",
-    "PILIH PEMAIN",
-    43, 36
-)
-
-local playerLabel = make(
-    "TextLabel",
-    "Target: Belum dipilih",
-    82, 20
-)
-
-local propBtn = make(
-    "TextButton",
-    "SCAN PROP MILIK SAYA",
-    108, 37
-)
-
-local propLabel = make(
-    "TextLabel",
-    "Prop: Belum dipilih",
-    149, 22
-)
-
-local heightBox = make(
-    "TextBox",
-    "0",
-    178, 34
-)
-
+local playerBtn = propMake("TextButton", "PropTarget", "TARGET: gunakan pemain terpilih di HUB", 34, 30, COLORS.blue)
+local playerLabel = propMake("TextLabel", "PropTargetLabel", "Target: Belum dipilih", 67, 20)
+local propBtn = propMake("TextButton", "ScanProp", "SCAN PROP MILIK SAYA", 91, 31, COLORS.purple)
+local propLabel = propMake("TextLabel", "PropLabel", "Prop: Belum dipilih", 126, 20)
+local heightBox = propMake("TextBox", "HeightOffset", "0", 151, 29, COLORS.field)
 heightBox.ClearTextOnFocus = false
-heightBox.PlaceholderText =
-    "Offset dari kaki (studs)"
-
-local toggle = make(
-    "TextButton",
-    "ON | FAST FOLLOW FEET",
-    224, 43
-)
-
-toggle.BackgroundColor3 =
-    Color3.fromRGB(25, 150, 85)
-
-local status = make(
-    "TextLabel",
-    "Status: Siap",
-    277, 35
-)
-
-status.TextSize = 11
+heightBox.PlaceholderText = "Offset dari kaki (studs)"
+local toggle = propMake("TextButton", "ToggleFollow", "ON | FAST FOLLOW FEET", 184, 34, COLORS.green)
+local status = propMake("TextLabel", "PropStatus", "Status: Siap", 222, 29)
 status.TextWrapped = true
-
-local stats = make(
-    "TextLabel",
-    "RTT: - | Calls OK: 0 | Error: 0",
-    314, 24
-)
-
+status.TextSize = 11
+local stats = propMake("TextLabel", "PropStats", "RTT: - | Calls OK: 0 | Error: 0", 253, 22)
 stats.TextSize = 10
 
+local picker = Instance.new("ScrollingFrame")
+picker.Name = "PropPicker"
+picker.Size = UDim2.new(1, -20, 0, 145)
+picker.Position = UDim2.fromOffset(10, 78)
+picker.BackgroundColor3 = COLORS.list
+picker.BackgroundTransparency = 0.03
+picker.BorderSizePixel = 0
+picker.ScrollBarThickness = 4
+picker.CanvasSize = UDim2.fromOffset(0, 0)
+picker.Visible = false
+picker.ZIndex = 20
+picker.Parent = propPanel
+round(picker, 8)
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 4)
+layout.Parent = picker
+
+local function propBind(signal, callback)
+    local connection = signal:Connect(callback)
+    table.insert(propConnections, connection)
+    return connection
+end
+
+local function notify(message)
+    if not gui.Parent then return end
+    status.Text = tostring(message)
+    print("[XLORD FEET] " .. tostring(message))
+end
+
+
+listen(propModeButton.MouseButton1Click:Connect(function()
+    propPanel.Visible = not propPanel.Visible
+    propModeButton.Text = propPanel.Visible and "HUB" or "PROP"
+    if propPanel.Visible then
+        propTarget = selectedPlayer
+        playerLabel.Text = propTarget and ("Target: @" .. propTarget.Name) or "Target: Belum dipilih"
+    else
+        propModeButton.Text = "PROP"
+    end
+end))
+listen(playerBtn.MouseButton1Click:Connect(function()
+    propTarget = selectedPlayer
+    if propTarget then
+        playerLabel.Text = "Target: @" .. propTarget.Name
+        notify("Target mengikuti pilihan HUB: " .. propTarget.Name)
+    else
+        playerLabel.Text = "Target: Belum dipilih"
+        notify("Pilih pemain dari daftar utama HUB terlebih dahulu")
+    end
+end))
 --------------------------------------------------
 -- STATUS
 --------------------------------------------------
 
-local function notify(message)
-    if not alive then return end
-
-    status.Text = tostring(message)
-
-    print("[XLORD FEET] " .. tostring(message))
-end
-
 local function updateStats()
-    if not alive then return end
+    if not propAlive then return end
 
     stats.Text = string.format(
         "RTT: %dms | Calls OK: %d | Error: %d",
@@ -1439,34 +1334,8 @@ local function updateToggle()
 end
 
 --------------------------------------------------
--- PICKER GUI
+-- PROP PICKER (REUSES THE INTEGRATED PANEL)
 --------------------------------------------------
-
-local picker = Instance.new("ScrollingFrame")
-picker.Name = "Picker"
-
-picker.Size = UDim2.fromOffset(
-    286, 170
-)
-
-picker.Position = UDim2.fromOffset(
-    12, 80
-)
-
-picker.BackgroundColor3 =
-    Color3.fromRGB(35, 39, 53)
-
-picker.ScrollBarThickness = 4
-picker.ZIndex = 20
-picker.Visible = false
-picker.Parent = frame
-
-Instance.new("UICorner", picker).CornerRadius =
-    UDim.new(0, 8)
-
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 4)
-layout.Parent = picker
 
 local function openPicker(items, callback)
     for _, child in ipairs(
@@ -1515,40 +1384,8 @@ local function openPicker(items, callback)
 end
 
 --------------------------------------------------
--- PILIH PEMAIN
+-- TARGET SHARED WITH XLORD HUB V22
 --------------------------------------------------
-
-bind(playerBtn.MouseButton1Click, function()
-    if running then
-        notify("STOP dahulu untuk mengganti pemain")
-        return
-    end
-
-    local items = {}
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        table.insert(items, {
-            label = p.DisplayName ..
-                " (@" .. p.Name .. ")",
-            value = p
-        })
-    end
-
-    table.sort(items, function(a, b)
-        return a.label < b.label
-    end)
-
-    openPicker(items, function(p)
-        target = p
-        env.XLORD_SHARED_TARGET = p
-
-        playerLabel.Text =
-            "Target: @" .. p.Name
-
-        notify("Target dipilih: " .. p.Name)
-    end)
-end)
-
 --------------------------------------------------
 -- SCAN PROP
 --------------------------------------------------
@@ -1687,7 +1524,7 @@ local function selectProp(data)
     )
 end
 
-bind(propBtn.MouseButton1Click, function()
+propBind(propBtn.MouseButton1Click, function()
     if running then
         notify("STOP dahulu untuk scan prop")
         return
@@ -1725,13 +1562,13 @@ end)
 --------------------------------------------------
 
 local function getTargetRoot()
-    target = env.XLORD_SHARED_TARGET or target
-    if not target or
-        target.Parent ~= Players then
+    propTarget = selectedPlayer
+    if not propTarget or
+        propTarget.Parent ~= Players then
         return nil
     end
 
-    local character = target.Character
+    local character = propTarget.Character
 
     if not character then
         return nil
@@ -1830,7 +1667,7 @@ local function followLoop(myToken)
     local consecutiveErrors = 0
 
     while running
-        and alive
+        and propAlive
         and token == myToken do
 
         local root = getTargetRoot()
@@ -1910,7 +1747,7 @@ local function followLoop(myToken)
 
                     notify(
                         "FOLLOW KAKI: @" ..
-                        target.Name
+                        propTarget.Name
                     )
 
                     updateStats()
@@ -1963,7 +1800,7 @@ end
 local function startFollow()
     if running then return end
 
-    if not target then
+    if not propTarget then
         notify("Pilih pemain dahulu")
         return
     end
@@ -2002,7 +1839,7 @@ local function startFollow()
 
     notify(
         "FAST FOLLOW FEET: @" ..
-        target.Name
+        propTarget.Name
     )
 
     local myToken = token
@@ -2012,7 +1849,7 @@ local function startFollow()
     end)
 end
 
-bind(toggle.MouseButton1Click, function()
+propBind(toggle.MouseButton1Click, function()
     if running then
         stopFollow()
     else
@@ -2021,23 +1858,8 @@ bind(toggle.MouseButton1Click, function()
 end)
 
 --------------------------------------------------
--- CLEANUP
+-- CLEANUP IS HANDLED BY THE MAIN HUB
 --------------------------------------------------
-
-env.XLORD_PROP_CLEANUP = function()
-    running = false
-    alive = false
-    token += 1
-
-    for _, connection in ipairs(
-        connections
-    ) do
-        connection:Disconnect()
-    end
-
-    gui:Destroy()
-end
-
 --------------------------------------------------
 -- READY
 --------------------------------------------------
@@ -2047,5 +1869,25 @@ notify(
 )
 
 print(
-    "[XLORD] FAST FOLLOW FEET V3 LOADED"
+    "[XLORD V22] Integrated prop follow loaded"
 )
+
+--====================================================
+-- CLEANUP AND RUN
+--====================================================
+gui.Destroying:Connect(function()
+    propAlive = false
+    running = false
+    token += 1
+    for _, connection in ipairs(propConnections) do pcall(function() connection:Disconnect() end) end
+    if trampolinePreview then trampolinePreview:Destroy(); trampolinePreview = nil end
+    stopFling(true)
+    if cameraConnection then cameraConnection:Disconnect() end
+    for _, connection in ipairs(connections) do
+        if connection.Connected then connection:Disconnect() end
+    end
+    table.clear(connections)
+end)
+
+refreshPlayers()
+print("[XLORD V22] Loaded: Auto Sofa, Teleport, genuine server trampoline activation TEST, XYZ, resize, minimize")
