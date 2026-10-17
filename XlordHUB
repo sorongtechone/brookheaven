@@ -70,6 +70,7 @@ main.AnchorPoint = Vector2.new(0.5, 0.5)
 main.Position = UDim2.fromScale(0.5, 0.5)
 main.Size = UDim2.fromOffset(320, 490)
 main.BackgroundColor3 = COLORS.panel
+main.BackgroundTransparency = 0.18 -- sedikit transparan
 main.BorderSizePixel = 0
 main.Active = true
 main.Parent = gui
@@ -1021,6 +1022,8 @@ local function refreshPlayers()
                 row.MouseButton1Click:Connect(function()
                     if flingRunning then stopFling(true) end
                     selectedPlayer = player
+                    local sharedEnv = (getgenv and getgenv()) or _G
+                    sharedEnv.XLORD_SHARED_TARGET = player
                     targetLabel.Text = "Target: @" .. player.Name
                     setStatus("Target dipilih")
                     refreshPlayers()
@@ -1040,6 +1043,8 @@ listen(Players.PlayerRemoving:Connect(function(player)
     if player == selectedPlayer then
         if flingRunning then stopFling(true) end
         selectedPlayer = nil
+        local sharedEnv = (getgenv and getgenv()) or _G
+        sharedEnv.XLORD_SHARED_TARGET = nil
         targetLabel.Text = "Target: Belum dipilih"
     end
     task.defer(refreshPlayers)
@@ -1098,6 +1103,10 @@ listen(no.MouseButton1Click:Connect(function()
     overlay.Visible = false
 end))
 listen(yes.MouseButton1Click:Connect(function()
+    local sharedEnv = (getgenv and getgenv()) or _G
+    if sharedEnv.XLORD_PROP_CLEANUP then
+        pcall(sharedEnv.XLORD_PROP_CLEANUP)
+    end
     gui:Destroy()
 end))
 listen(minimize.MouseButton1Click:Connect(function()
@@ -1182,3 +1191,861 @@ end)
 
 refreshPlayers()
 print("[XLORD V21] Loaded: Auto Sofa, Teleport, genuine server trampoline activation TEST, XYZ, resize, minimize")
+
+--====================================================
+-- XLORD PROP CONTROLLER V3 | TERGABUNG
+--====================================================
+
+
+--[[
+    XLORD PROP CONTROLLER V3
+    BROOKHAVEN | FAST FOLLOW FEET
+
+    FITUR:
+    - Scan prop yang sudah di-spawn
+    - Pilih target pemain
+    - Follow posisi kaki
+    - Posisi bawah prop sejajar kaki
+    - Velocity prediction
+    - Latency compensation
+    - Update interval 70ms
+    - Pengaturan offset tinggi
+    - Floating GUI
+    - ON / OFF
+    - Remote SetCurrentCFrame
+
+    Tidak menggunakan PivotTo lokal.
+]]
+
+--------------------------------------------------
+-- SERVICES
+--------------------------------------------------
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local LP = Players.LocalPlayer
+local PG = LP:WaitForChild("PlayerGui")
+
+local env = getgenv and getgenv() or _G
+
+if env.XLORD_PROP_CLEANUP then
+    pcall(env.XLORD_PROP_CLEANUP)
+end
+
+--------------------------------------------------
+-- CONFIG
+--------------------------------------------------
+
+local SEND_INTERVAL = 0.07
+local MIN_MOVEMENT = 0.10
+
+local BASE_PREDICTION = 0.10
+local MAX_PREDICTION = 0.30
+
+local MAX_VELOCITY = 40
+local ERROR_DELAY = 0.20
+local MAX_ERRORS = 5
+
+--------------------------------------------------
+-- STATE
+--------------------------------------------------
+
+local target = nil
+local selectedProp = nil
+local selectedRemote = nil
+
+local rotation = CFrame.new()
+local bottomOffset = 0
+
+local running = false
+local alive = true
+local token = 0
+
+local lastRTT = 0
+local successCount = 0
+local errorCount = 0
+
+local connections = {}
+
+local function bind(signal, callback)
+    local connection = signal:Connect(callback)
+    table.insert(connections, connection)
+    return connection
+end
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "XLORD_FastFeet_V3"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = false
+gui.Parent = PG
+
+local frame = Instance.new("Frame")
+frame.Name = "Main"
+frame.Size = UDim2.fromOffset(310, 360)
+frame.Position = UDim2.new(
+    0.5, -155,
+    0.4, -120
+)
+
+frame.BackgroundColor3 =
+    Color3.fromRGB(24, 27, 38)
+frame.BackgroundTransparency = 0.18 -- sedikit transparan
+
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
+
+Instance.new("UICorner", frame).CornerRadius =
+    UDim.new(0, 12)
+
+local function make(class, str, y, height)
+    local obj = Instance.new(class)
+
+    obj.Size = UDim2.new(
+        1, -24, 0, height
+    )
+
+    obj.Position = UDim2.fromOffset(
+        12, y
+    )
+
+    obj.BackgroundColor3 =
+        Color3.fromRGB(45, 50, 68)
+
+    obj.Text = str
+    obj.TextColor3 =
+        Color3.new(1, 1, 1)
+
+    obj.TextSize = 13
+    obj.Font = Enum.Font.GothamBold
+    obj.Parent = frame
+
+    if class == "TextLabel" then
+        obj.BackgroundTransparency = 1
+    else
+        Instance.new("UICorner", obj).CornerRadius =
+            UDim.new(0, 7)
+    end
+
+    return obj
+end
+
+make(
+    "TextLabel",
+    "XLORD | FAST FOLLOW FEET V3",
+    5, 30
+)
+
+local playerBtn = make(
+    "TextButton",
+    "PILIH PEMAIN",
+    43, 36
+)
+
+local playerLabel = make(
+    "TextLabel",
+    "Target: Belum dipilih",
+    82, 20
+)
+
+local propBtn = make(
+    "TextButton",
+    "SCAN PROP MILIK SAYA",
+    108, 37
+)
+
+local propLabel = make(
+    "TextLabel",
+    "Prop: Belum dipilih",
+    149, 22
+)
+
+local heightBox = make(
+    "TextBox",
+    "0",
+    178, 34
+)
+
+heightBox.ClearTextOnFocus = false
+heightBox.PlaceholderText =
+    "Offset dari kaki (studs)"
+
+local toggle = make(
+    "TextButton",
+    "ON | FAST FOLLOW FEET",
+    224, 43
+)
+
+toggle.BackgroundColor3 =
+    Color3.fromRGB(25, 150, 85)
+
+local status = make(
+    "TextLabel",
+    "Status: Siap",
+    277, 35
+)
+
+status.TextSize = 11
+status.TextWrapped = true
+
+local stats = make(
+    "TextLabel",
+    "RTT: - | Calls OK: 0 | Error: 0",
+    314, 24
+)
+
+stats.TextSize = 10
+
+--------------------------------------------------
+-- STATUS
+--------------------------------------------------
+
+local function notify(message)
+    if not alive then return end
+
+    status.Text = tostring(message)
+
+    print("[XLORD FEET] " .. tostring(message))
+end
+
+local function updateStats()
+    if not alive then return end
+
+    stats.Text = string.format(
+        "RTT: %dms | Calls OK: %d | Error: %d",
+        math.floor(lastRTT * 1000),
+        successCount,
+        errorCount
+    )
+end
+
+local function updateToggle()
+    if running then
+        toggle.Text = "OFF | STOP FOLLOW"
+
+        toggle.BackgroundColor3 =
+            Color3.fromRGB(190, 55, 55)
+    else
+        toggle.Text = "ON | FAST FOLLOW FEET"
+
+        toggle.BackgroundColor3 =
+            Color3.fromRGB(25, 150, 85)
+    end
+end
+
+--------------------------------------------------
+-- PICKER GUI
+--------------------------------------------------
+
+local picker = Instance.new("ScrollingFrame")
+picker.Name = "Picker"
+
+picker.Size = UDim2.fromOffset(
+    286, 170
+)
+
+picker.Position = UDim2.fromOffset(
+    12, 80
+)
+
+picker.BackgroundColor3 =
+    Color3.fromRGB(35, 39, 53)
+
+picker.ScrollBarThickness = 4
+picker.ZIndex = 20
+picker.Visible = false
+picker.Parent = frame
+
+Instance.new("UICorner", picker).CornerRadius =
+    UDim.new(0, 8)
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 4)
+layout.Parent = picker
+
+local function openPicker(items, callback)
+    for _, child in ipairs(
+        picker:GetChildren()
+    ) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    for i, item in ipairs(items) do
+        local btn = Instance.new("TextButton")
+
+        btn.Size = UDim2.new(
+            1, -8, 0, 35
+        )
+
+        btn.LayoutOrder = i
+
+        btn.BackgroundColor3 =
+            Color3.fromRGB(58, 64, 85)
+
+        btn.Text = item.label
+        btn.TextSize = 12
+
+        btn.TextColor3 =
+            Color3.new(1, 1, 1)
+
+        btn.Font = Enum.Font.Gotham
+
+        btn.ZIndex = 21
+        btn.Parent = picker
+
+        btn.MouseButton1Click:Connect(function()
+            picker.Visible = false
+            callback(item.value)
+        end)
+    end
+
+    picker.CanvasSize = UDim2.fromOffset(
+        0,
+        #items * 39 + 8
+    )
+
+    picker.Visible = true
+end
+
+--------------------------------------------------
+-- PILIH PEMAIN
+--------------------------------------------------
+
+bind(playerBtn.MouseButton1Click, function()
+    if running then
+        notify("STOP dahulu untuk mengganti pemain")
+        return
+    end
+
+    local items = {}
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        table.insert(items, {
+            label = p.DisplayName ..
+                " (@" .. p.Name .. ")",
+            value = p
+        })
+    end
+
+    table.sort(items, function(a, b)
+        return a.label < b.label
+    end)
+
+    openPicker(items, function(p)
+        target = p
+        env.XLORD_SHARED_TARGET = p
+
+        playerLabel.Text =
+            "Target: @" .. p.Name
+
+        notify("Target dipilih: " .. p.Name)
+    end)
+end)
+
+--------------------------------------------------
+-- SCAN PROP
+--------------------------------------------------
+
+local function scanProps()
+    local found = {}
+    local seen = {}
+
+    local username = LP.Name:lower()
+    local ownedName = "prop" .. username
+
+    local folders = {
+        Workspace:FindFirstChild("WorkspaceCom"),
+        Workspace:FindFirstChild("bh_Props"),
+        Workspace:FindFirstChild("Props")
+    }
+
+    local function inspect(obj)
+        if not obj:IsA("Model")
+            and not obj:IsA("BasePart") then
+            return
+        end
+
+        local name = obj.Name:lower()
+
+        local owned =
+            name == ownedName or
+            (
+                name:find("prop", 1, true)
+                and name:find(username, 1, true)
+            )
+
+        if not owned then
+            return
+        end
+
+        local remote = obj:FindFirstChild(
+            "SetCurrentCFrame",
+            true
+        )
+
+        if not remote or
+            not remote:IsA("RemoteFunction") then
+            return
+        end
+
+        if not seen[obj] then
+            seen[obj] = true
+
+            table.insert(found, {
+                object = obj,
+                remote = remote
+            })
+        end
+    end
+
+    for _, folder in ipairs(folders) do
+        if folder then
+            inspect(folder)
+
+            for _, obj in ipairs(
+                folder:GetDescendants()
+            ) do
+                inspect(obj)
+            end
+        end
+    end
+
+    return found
+end
+
+--------------------------------------------------
+-- HITUNG POSISI BAWAH PROP
+--------------------------------------------------
+
+local function calculateBottomOffset(obj)
+    local ok, result = pcall(function()
+        local pivot = obj:GetPivot()
+
+        local boundsCF
+        local boundsSize
+
+        if obj:IsA("Model") then
+            boundsCF, boundsSize =
+                obj:GetBoundingBox()
+        else
+            boundsCF = obj.CFrame
+            boundsSize = obj.Size
+        end
+
+        local lowestY =
+            boundsCF.Position.Y -
+            boundsSize.Y / 2
+
+        -- Jarak dari pivot sampai bawah prop
+        return pivot.Position.Y - lowestY
+    end)
+
+    if ok and type(result) == "number" then
+        return result
+    end
+
+    return 0
+end
+
+--------------------------------------------------
+-- PILIH PROP
+--------------------------------------------------
+
+local function selectProp(data)
+    selectedProp = data.object
+    selectedRemote = data.remote
+
+    local ok, cf = pcall(function()
+        return selectedProp:GetPivot()
+    end)
+
+    if ok then
+        rotation = cf.Rotation
+    else
+        rotation = CFrame.new()
+    end
+
+    -- Supaya bagian bawah prop berada di kaki
+    bottomOffset =
+        calculateBottomOffset(selectedProp)
+
+    propLabel.Text =
+        "Prop: " .. selectedProp.Name
+
+    notify(
+        string.format(
+            "Prop dipilih | Bottom offset: %.2f",
+            bottomOffset
+        )
+    )
+end
+
+bind(propBtn.MouseButton1Click, function()
+    if running then
+        notify("STOP dahulu untuk scan prop")
+        return
+    end
+
+    notify("Scanning prop...")
+
+    local found = scanProps()
+
+    if #found == 0 then
+        notify("Prop tidak ditemukan. Spawn manual dahulu.")
+        return
+    end
+
+    if #found == 1 then
+        selectProp(found[1])
+        return
+    end
+
+    local items = {}
+
+    for i, data in ipairs(found) do
+        table.insert(items, {
+            label = "Prop " .. i ..
+                " | " .. data.object.Name,
+            value = data
+        })
+    end
+
+    openPicker(items, selectProp)
+end)
+
+--------------------------------------------------
+-- TARGET ROOT
+--------------------------------------------------
+
+local function getTargetRoot()
+    target = env.XLORD_SHARED_TARGET or target
+    if not target or
+        target.Parent ~= Players then
+        return nil
+    end
+
+    local character = target.Character
+
+    if not character then
+        return nil
+    end
+
+    return character:FindFirstChild(
+        "HumanoidRootPart"
+    )
+end
+
+--------------------------------------------------
+-- DETEKSI KETINGGIAN KAKI
+--------------------------------------------------
+
+local function getFootHeight(root)
+    local character = root.Parent
+
+    local humanoid =
+        character:FindFirstChildOfClass(
+            "Humanoid"
+        )
+
+    if not humanoid then
+        return root.Position.Y - 3
+    end
+
+    -- Perkiraan tinggi telapak kaki dari root
+    local distance =
+        humanoid.HipHeight +
+        root.Size.Y / 2
+
+    return root.Position.Y - distance
+end
+
+--------------------------------------------------
+-- PREDIKSI POSISI KAKI TARGET
+--------------------------------------------------
+
+local function calculatePosition(root)
+    local heightOffset = math.clamp(
+        tonumber(heightBox.Text) or 0,
+        -10, 20
+    )
+
+    local velocity =
+        root.AssemblyLinearVelocity
+
+    -- Prediksi pergerakan horizontal
+    local horizontalVelocity = Vector3.new(
+        velocity.X,
+        0,
+        velocity.Z
+    )
+
+    if horizontalVelocity.Magnitude >
+        MAX_VELOCITY then
+
+        horizontalVelocity =
+            horizontalVelocity.Unit *
+            MAX_VELOCITY
+    end
+
+    -- Kompensasi latensi
+    local predictionTime = math.clamp(
+        BASE_PREDICTION + lastRTT * 0.5,
+        BASE_PREDICTION,
+        MAX_PREDICTION
+    )
+
+    local predicted =
+        horizontalVelocity * predictionTime
+
+    -- Tinggi kaki pemain
+    local footY = getFootHeight(root)
+
+    -- Tambahkan offset bawah prop
+    local finalY =
+        footY +
+        bottomOffset +
+        heightOffset
+
+    return Vector3.new(
+        root.Position.X + predicted.X,
+        finalY,
+        root.Position.Z + predicted.Z
+    )
+end
+
+--------------------------------------------------
+-- FAST FOLLOW LOOP
+--------------------------------------------------
+
+local function followLoop(myToken)
+    local lastPosition = nil
+    local lastStatus = 0
+    local consecutiveErrors = 0
+
+    while running
+        and alive
+        and token == myToken do
+
+        local root = getTargetRoot()
+
+        if not root then
+            notify("Menunggu target...")
+            task.wait(0.2)
+            continue
+        end
+
+        if not selectedProp or
+            not selectedProp.Parent then
+
+            notify("Prop hilang")
+            break
+        end
+
+        local remote = selectedRemote
+
+        if not remote or
+            not remote.Parent or
+            not remote:IsA("RemoteFunction") then
+
+            notify("Remote prop hilang")
+            break
+        end
+
+        ----------------------------------
+        -- CALCULATE FOOT POSITION
+        ----------------------------------
+
+        local position =
+            calculatePosition(root)
+
+        local moved =
+            not lastPosition or
+            (
+                position - lastPosition
+            ).Magnitude >= MIN_MOVEMENT
+
+        if moved then
+
+            ----------------------------------
+            -- TARGET CFRAME
+            ----------------------------------
+
+            local goal =
+                CFrame.new(position) *
+                rotation
+
+            ----------------------------------
+            -- SEND TO SERVER
+            ----------------------------------
+
+            local startTime = os.clock()
+
+            local ok, result = pcall(function()
+                return remote:InvokeServer(goal)
+            end)
+
+            lastRTT =
+                os.clock() - startTime
+
+            if not running or
+                token ~= myToken then
+                break
+            end
+
+            if ok and result ~= false then
+                successCount += 1
+                consecutiveErrors = 0
+
+                lastPosition = position
+
+                if os.clock() -
+                    lastStatus >= 0.8 then
+
+                    notify(
+                        "FOLLOW KAKI: @" ..
+                        target.Name
+                    )
+
+                    updateStats()
+                    lastStatus = os.clock()
+                end
+            else
+                errorCount += 1
+                consecutiveErrors += 1
+
+                notify(
+                    "Remote error: " ..
+                    tostring(result)
+                )
+
+                updateStats()
+
+                if consecutiveErrors >= MAX_ERRORS then
+                    notify("STOP: Terlalu banyak error")
+                    break
+                end
+
+                task.wait(ERROR_DELAY)
+            end
+        end
+
+        task.wait(SEND_INTERVAL)
+    end
+
+    if token == myToken then
+        running = false
+        updateToggle()
+        updateStats()
+    end
+end
+
+--------------------------------------------------
+-- START / STOP
+--------------------------------------------------
+
+local function stopFollow()
+    running = false
+    token += 1
+
+    updateToggle()
+    updateStats()
+
+    notify("Follow dihentikan")
+end
+
+local function startFollow()
+    if running then return end
+
+    if not target then
+        notify("Pilih pemain dahulu")
+        return
+    end
+
+    if not selectedProp then
+        notify("Scan prop dahulu")
+        return
+    end
+
+    if not selectedProp.Parent then
+        notify("Prop sudah tidak tersedia")
+        return
+    end
+
+    if not selectedRemote or
+        not selectedRemote.Parent then
+
+        notify("Remote prop tidak tersedia")
+        return
+    end
+
+    if not getTargetRoot() then
+        notify("Karakter target belum tersedia")
+        return
+    end
+
+    running = true
+    token += 1
+
+    lastRTT = 0
+    successCount = 0
+    errorCount = 0
+
+    updateToggle()
+    updateStats()
+
+    notify(
+        "FAST FOLLOW FEET: @" ..
+        target.Name
+    )
+
+    local myToken = token
+
+    task.spawn(function()
+        followLoop(myToken)
+    end)
+end
+
+bind(toggle.MouseButton1Click, function()
+    if running then
+        stopFollow()
+    else
+        startFollow()
+    end
+end)
+
+--------------------------------------------------
+-- CLEANUP
+--------------------------------------------------
+
+env.XLORD_PROP_CLEANUP = function()
+    running = false
+    alive = false
+    token += 1
+
+    for _, connection in ipairs(
+        connections
+    ) do
+        connection:Disconnect()
+    end
+
+    gui:Destroy()
+end
+
+--------------------------------------------------
+-- READY
+--------------------------------------------------
+
+notify(
+    "Siap | Spawn prop lalu SCAN PROP"
+)
+
+print(
+    "[XLORD] FAST FOLLOW FEET V3 LOADED"
+)
