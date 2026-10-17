@@ -1,5 +1,5 @@
 --====================================================
--- XLORD HUB V22 | BROOKHAVEN RP
+-- XLORD HUB V23 | BROOKHAVEN RP
 -- Teleport, One-Click Auto Couch TP + HP Recovery Test, XYZ, Resize, Minimize
 -- Scroll fix: no UIScale; explicit content height
 --====================================================
@@ -1391,64 +1391,48 @@ end
 --------------------------------------------------
 
 local function scanProps()
+    -- Logika scan dikembalikan ke pola V3 yang sebelumnya terasa lebih cepat.
+    -- Periksa folder prop yang dikenal sekali, tanpa fast-path lalu scan ulang.
     local found = {}
     local seen = {}
 
-    local username = LP.Name:lower()
+    local username = localPlayer.Name:lower()
     local ownedName = "prop" .. username
 
     local folders = {
-        Workspace:FindFirstChild("WorkspaceCom"),
-        Workspace:FindFirstChild("bh_Props"),
-        Workspace:FindFirstChild("Props")
+        workspace:FindFirstChild("WorkspaceCom"),
+        workspace:FindFirstChild("bh_Props"),
+        workspace:FindFirstChild("Props")
     }
 
     local function inspect(obj)
-        if not obj:IsA("Model")
-            and not obj:IsA("BasePart") then
+        if not obj:IsA("Model") and not obj:IsA("BasePart") then
             return
         end
 
         local name = obj.Name:lower()
-
-        local owned =
-            name == ownedName or
-            (
-                name:find("prop", 1, true)
-                and name:find(username, 1, true)
-            )
+        local owned = name == ownedName or
+            (name:find("prop", 1, true) and name:find(username, 1, true))
 
         if not owned then
             return
         end
 
-        local remote = obj:FindFirstChild(
-            "SetCurrentCFrame",
-            true
-        )
-
-        if not remote or
-            not remote:IsA("RemoteFunction") then
+        local remote = obj:FindFirstChild("SetCurrentCFrame", true)
+        if not remote or not remote:IsA("RemoteFunction") then
             return
         end
 
         if not seen[obj] then
             seen[obj] = true
-
-            table.insert(found, {
-                object = obj,
-                remote = remote
-            })
+            table.insert(found, { object = obj, remote = remote })
         end
     end
 
     for _, folder in ipairs(folders) do
         if folder then
             inspect(folder)
-
-            for _, obj in ipairs(
-                folder:GetDescendants()
-            ) do
+            for _, obj in ipairs(folder:GetDescendants()) do
                 inspect(obj)
             end
         end
@@ -1456,7 +1440,6 @@ local function scanProps()
 
     return found
 end
-
 --------------------------------------------------
 -- HITUNG POSISI BAWAH PROP
 --------------------------------------------------
