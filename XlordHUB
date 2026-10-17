@@ -1631,10 +1631,6 @@ local function calculatePosition(root)
     )
 end
 
---------------------------------------------------
--- FAST FOLLOW LOOP
---------------------------------------------------
-
 local function followLoop(myToken)
     local lastPosition = nil
     local lastStatus = 0
