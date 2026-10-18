@@ -9,6 +9,73 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+--====================================================
+-- ANTI SIT
+--====================================================
+local antiSitEnabled = false
+local antiSitHumanoidConnection = nil
+local antiSitCharacterConnection = nil
+
+local function monitorAntiSitCharacter(character)
+    if not antiSitEnabled or not character then
+        return
+    end
+
+    if antiSitHumanoidConnection then
+        antiSitHumanoidConnection:Disconnect()
+        antiSitHumanoidConnection = nil
+    end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+        or character:WaitForChild("Humanoid", 5)
+
+    if not humanoid or not antiSitEnabled then
+        return
+    end
+
+    antiSitHumanoidConnection =
+        humanoid:GetPropertyChangedSignal("Sit"):Connect(function()
+            if antiSitEnabled
+                and humanoid.Parent
+                and humanoid.Sit then
+                humanoid.Sit = false
+            end
+        end)
+
+    if humanoid.Sit then
+        humanoid.Sit = false
+    end
+end
+
+local function setAntiSit(enabled)
+    antiSitEnabled = enabled
+
+    if not enabled then
+        if antiSitHumanoidConnection then
+            antiSitHumanoidConnection:Disconnect()
+            antiSitHumanoidConnection = nil
+        end
+
+        if antiSitCharacterConnection then
+            antiSitCharacterConnection:Disconnect()
+            antiSitCharacterConnection = nil
+        end
+
+        return
+    end
+
+    monitorAntiSitCharacter(Players.LocalPlayer.Character)
+
+    if not antiSitCharacterConnection then
+        antiSitCharacterConnection =
+            Players.LocalPlayer.CharacterAdded:Connect(function(character)
+                task.defer(function()
+                    monitorAntiSitCharacter(character)
+                end)
+            end)
+    end
+end
+
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
@@ -91,7 +158,12 @@ local smaller = button(main, "Smaller", "-", COLORS.field)
 local larger = button(main, "Larger", "+", COLORS.blue)
 local minimize = button(main, "Minimize", "_", COLORS.green)
 local close = button(main, "Close", "X", COLORS.red)
+
 local propModeButton = button(main, "PropMode", "PROP", COLORS.purple)
+local xyzButton = button(main, "XYZToggle", "XYZ", COLORS.blue)
+local antiSitButton = button(main, "AntiSitToggle", "AS", COLORS.green)
+antiSitButton.Visible = false -- Diaktifkan setelah posisi header diatur
+
 
 local floating = button(gui, "FloatingXL", "XL", COLORS.blue)
 floating.Size = UDim2.fromOffset(44, 44)
@@ -180,7 +252,7 @@ end
 -- RESIZE: change real pixel dimensions, NOT UIScale.
 --====================================================
 local width, height = 320, 490
-local MIN_WIDTH, MIN_HEIGHT = 240, 365
+local MIN_WIDTH, MIN_HEIGHT = 320, 365
 local MAX_WIDTH, MAX_HEIGHT = 420, 640
 local ROW_HEIGHT, ROW_GAP, LIST_PADDING = 38, 6, 6
 local listCount = 0
@@ -234,46 +306,75 @@ local function ensureOnScreen(object)
     end
 end
 
+
 local function applySize(newWidth, newHeight)
     local view = viewportSize()
+
     local maximumWidth = math.min(MAX_WIDTH, math.max(180, view.X - 16))
     local maximumHeight = math.min(MAX_HEIGHT, math.max(300, view.Y - 16))
+
     width = math.clamp(newWidth, math.min(MIN_WIDTH, maximumWidth), maximumWidth)
     height = math.clamp(newHeight, math.min(MIN_HEIGHT, maximumHeight), maximumHeight)
 
     main.Size = UDim2.fromOffset(width, height)
+
+    -- Header
     header.Position = UDim2.fromOffset(12, 0)
-    header.Size = UDim2.fromOffset(math.max(65, width - 198), 42)
-    header.Text = width < 275 and "XLORD" or "XLORD | V22"
+    header.Size = UDim2.fromOffset(math.max(65, width - 310), 42)
+    header.Text = width < 320 and "XLORD" or "XLORD | V22"
 
+    -- Ukuran tombol header
     local sizeBtn = 30
-    smaller.Size, larger.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
-    minimize.Size, close.Size = UDim2.fromOffset(sizeBtn, 30), UDim2.fromOffset(sizeBtn, 30)
-    propModeButton.Size = UDim2.fromOffset(30, 30)
-    propModeButton.Position = UDim2.fromOffset(width - 178, 6)
-    smaller.Position = UDim2.fromOffset(width - 144, 6)
-    larger.Position = UDim2.fromOffset(width - 110, 6)
-    minimize.Position = UDim2.fromOffset(width - 76, 6)
-    close.Position = UDim2.fromOffset(width - 42, 6)
 
+    smaller.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    larger.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    minimize.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    close.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+
+    propModeButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    xyzButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    antiSitButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+
+    -- Posisi tombol dari kanan ke kiri
+    close.Position = UDim2.fromOffset(width - 42, 6)
+    minimize.Position = UDim2.fromOffset(width - 76, 6)
+    larger.Position = UDim2.fromOffset(width - 110, 6)
+    smaller.Position = UDim2.fromOffset(width - 144, 6)
+
+    antiSitButton.Position = UDim2.fromOffset(width - 178, 6)
+    xyzButton.Position = UDim2.fromOffset(width - 212, 6)
+    propModeButton.Position = UDim2.fromOffset(width - 246, 6)
+
+    antiSitButton.Visible = true
+
+    -- Pencarian pemain
     search.Position = UDim2.fromOffset(10, 47)
     search.Size = UDim2.fromOffset(width - 20, 35)
+
     refresh.Position = UDim2.fromOffset(10, 88)
     refresh.Size = UDim2.fromOffset(width - 20, 31)
 
+    -- Daftar pemain
     local listHeight = math.max(35, height - 324)
+
     scroll.Position = UDim2.fromOffset(10, 125)
     scroll.Size = UDim2.fromOffset(width - 20, listHeight)
 
+    -- Target dan tombol aksi
     local targetY = 125 + listHeight + 7
+
     targetLabel.Position = UDim2.fromOffset(12, targetY)
     targetLabel.Size = UDim2.fromOffset(width - 24, 22)
+
     teleport.Position = UDim2.fromOffset(10, targetY + 28)
     teleport.Size = UDim2.fromOffset(width - 20, 34)
+
     fling.Position = UDim2.fromOffset(10, targetY + 68)
     fling.Size = UDim2.fromOffset(width - 20, 34)
+
     trampolineButton.Position = UDim2.fromOffset(10, targetY + 108)
     trampolineButton.Size = UDim2.fromOffset(width - 20, 34)
+
     status.Position = UDim2.fromOffset(10, targetY + 148)
     status.Size = UDim2.fromOffset(width - 20, 31)
 
@@ -284,6 +385,20 @@ local function applySize(newWidth, newHeight)
 end
 
 applySize(width, height)
+
+listen(antiSitButton.MouseButton1Click:Connect(function()
+    setAntiSit(not antiSitEnabled)
+
+    if antiSitEnabled then
+        antiSitButton.Text = "AS"
+        antiSitButton.BackgroundColor3 = COLORS.green
+        setStatus("Anti Sit ON")
+    else
+        antiSitButton.Text = "AS"
+        antiSitButton.BackgroundColor3 = COLORS.orange
+        setStatus("Anti Sit OFF")
+    end
+end))
 
 listen(smaller.MouseButton1Click:Connect(function()
     applySize(width - 20, height - 30)
@@ -1878,6 +1993,7 @@ gui.Destroying:Connect(function()
     propAlive = false
     running = false
     token += 1
+    setAntiSit(false)
     for _, connection in ipairs(propConnections) do pcall(function() connection:Disconnect() end) end
     if trampolinePreview then trampolinePreview:Destroy(); trampolinePreview = nil end
     stopFling(true)
