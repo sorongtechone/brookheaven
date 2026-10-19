@@ -1,10 +1,4 @@
---====================================================
--- XLORD GIANT MONSTER | CUSTOM SKELETON v3
--- Auto-measure: ukur bounding box tiap prop,
--- hitung spasi otomatis antar slot supaya tidak tumpang tindih.
--- Skeleton: kepala 1, badan 1, tangan L 3, tangan R 3,
--- kaki L 2, kaki R 2 (total 9). Sisa -> aura.
---====================================================
+
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
