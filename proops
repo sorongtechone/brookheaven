@@ -1,7 +1,10 @@
 --====================================================
--- XLORD GIANT MONSTER | PROP ASSEMBLY
--- Gabungkan semua prop milikmu jadi monster raksasa.
--- Prop disusun jadi tubuh monster, grup bergerak mengikuti kamu.
+-- XLORD GIANT MONSTER | CUSTOM SKELETON
+-- Skeleton: kepala 1, badan 1, tangan kiri 3, tangan kanan 3,
+-- kaki kiri 2, kaki kanan 2. Total 9 slot utama.
+-- Prop ekstra -> aura di sekitar badan.
+-- Monster mengikuti gerakan kamu (termasuk tangan ikut ayun
+-- mengikuti arah hadap / gerakan kamu).
 --====================================================
 
 local Players = game:GetService("Players")
@@ -68,7 +71,7 @@ local main = Instance.new("Frame")
 main.Name = "Main"
 main.AnchorPoint = Vector2.new(0, 0)
 main.Position = UDim2.fromOffset(20, 20)
-main.Size = UDim2.fromOffset(310, 460)
+main.Size = UDim2.fromOffset(310, 470)
 main.BackgroundColor3 = COLORS.panel
 main.BackgroundTransparency = 0.1
 main.BorderSizePixel = 0
@@ -79,7 +82,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "GIANT MONSTER | PROP"
+header.Text = "GIANT MONSTER | ANIM"
 header.Position = UDim2.fromOffset(10, 0)
 header.Size = UDim2.fromOffset(230, 40)
 header.TextXAlignment = Enum.TextXAlignment.Left
@@ -139,7 +142,7 @@ local heightBox = makeField("Tinggi:", "2", 210, 126, 92)
 local info = Instance.new("TextLabel")
 info.Name = "Info"
 info.BackgroundTransparency = 1
-info.Text = "Prop: 0 | Slot tubuh: 0"
+info.Text = "Prop: 0 | Slot tubuh: 0/9"
 info.Position = UDim2.fromOffset(10, 176)
 info.Size = UDim2.fromOffset(290, 20)
 info.TextXAlignment = Enum.TextXAlignment.Left
@@ -153,7 +156,7 @@ listFrame.Name = "PropList"
 listFrame.BackgroundColor3 = COLORS.list
 listFrame.BorderSizePixel = 0
 listFrame.Position = UDim2.fromOffset(10, 200)
-listFrame.Size = UDim2.fromOffset(290, 190)
+listFrame.Size = UDim2.fromOffset(290, 200)
 listFrame.ScrollBarThickness = 4
 listFrame.CanvasSize = UDim2.fromOffset(0, 0)
 listFrame.Parent = main
@@ -167,7 +170,7 @@ local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
 status.Text = "Siap | Scan prop dulu"
-status.Position = UDim2.fromOffset(10, 396)
+status.Position = UDim2.fromOffset(10, 406)
 status.Size = UDim2.fromOffset(290, 56)
 status.TextWrapped = true
 status.TextXAlignment = Enum.TextXAlignment.Left
@@ -184,11 +187,12 @@ end
 -- STATE
 --====================================================
 local myProps = {}
-local assignedSlots = {}   -- {prop, remote, offset Local}
+local assignedSlots = {}   -- {prop, remote, part="head|body|armL|armR|legL|legR|aura", index}
 local followRunning = false
 local attackRunning = false
 local followToken = 0
 local propConnections = {}
+local animPhase = 0
 
 --====================================================
 -- SCAN PROP
@@ -246,7 +250,7 @@ local function scanMyProps()
         round(lbl, 4)
     end
     listFrame.CanvasSize = UDim2.fromOffset(0, #myProps * 25 + 6)
-    info.Text = "Prop: " .. #myProps .. " | Slot tubuh: 0"
+    info.Text = "Prop: " .. #myProps .. " | Slot tubuh: 0/9"
     setStatus(#myProps > 0
         and ("Ditemukan " .. #myProps .. " prop. Atur skala lalu FOLLOW.")
         or "Tidak ada prop milikmu. Spawn prop manual dahulu.")
@@ -255,87 +259,109 @@ end
 listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
 
 --====================================================
--- SKELETON MONSTER (slot tubuh dalam unit lokal)
--- Koordinat lokal: X = kanan/kiri, Y = atas/bawah, Z = depan/belakang
--- (dikalikan skala saat dipakai)
+-- ASSIGN SLOT KE BAGIAN TUBUH
+-- Bagian: head(1), body(1), armL(3), armR(3), legL(2), legR(2)
+-- Sisa prop -> aura (lingkaran di sekitar badan)
 --====================================================
-local function buildSkeleton()
-    local S = {}
-    -- Kepala (1 prop)
-    table.insert(S, Vector3.new(0, 8, 0))
-    -- Badan (tumpuk vertikal)
-    table.insert(S, Vector3.new(0, 6, 0))
-    table.insert(S, Vector3.new(0, 4.5, 0))
-    table.insert(S, Vector3.new(0, 3, 0))
-    -- Tangan kiri
-    table.insert(S, Vector3.new(-3, 5.5, 0))
-    table.insert(S, Vector3.new(-5, 4.5, 0))
-    table.insert(S, Vector3.new(-7, 3.5, 0))
-    -- Tangan kanan
-    table.insert(S, Vector3.new(3, 5.5, 0))
-    table.insert(S, Vector3.new(5, 4.5, 0))
-    table.insert(S, Vector3.new(7, 3.5, 0))
-    -- Kaki kiri
-    table.insert(S, Vector3.new(-1.8, 1.5, 0))
-    table.insert(S, Vector3.new(-1.8, 0, 0))
-    -- Kaki kanan
-    table.insert(S, Vector3.new(1.8, 1.5, 0))
-    table.insert(S, Vector3.new(1.8, 0, 0))
-    -- Ekor (ke belakang)
-    table.insert(S, Vector3.new(0, 2, 3))
-    table.insert(S, Vector3.new(0, 1.5, 5))
-    table.insert(S, Vector3.new(0, 1, 7))
-    -- Sayap kiri
-    table.insert(S, Vector3.new(-6, 7, -2))
-    table.insert(S, Vector3.new(-9, 8, -3))
-    -- Sayap kanan
-    table.insert(S, Vector3.new(6, 7, -2))
-    table.insert(S, Vector3.new(9, 8, -3))
-    -- Tanduk
-    table.insert(S, Vector3.new(-1.5, 10, 0))
-    table.insert(S, Vector3.new(1.5, 10, 0))
-    -- Tambahan (kalau prop lebih banyak)
-    for i = 1, 30 do
-        local angle = i * 1.1
-        table.insert(S, Vector3.new(
-            math.cos(angle) * 6,
-            5 + math.sin(angle) * 3,
-            math.sin(angle) * 6
-        ))
-    end
-    return S
-end
-
-local SKELETON = buildSkeleton()
-
 local function assignSlots()
     assignedSlots = {}
-    for i, data in ipairs(myProps) do
-        local offset = SKELETON[i]
-        if not offset then
-            -- fallback: lingkaran di sekitar badan
-            local angle = i * 1.3
-            offset = Vector3.new(math.cos(angle) * 8, 3, math.sin(angle) * 8)
+    local cursor = 1
+    local function take(n, part)
+        local arr = {}
+        for k = 1, n do
+            local data = myProps[cursor]
+            if not data then break end
+            table.insert(arr, { object = data.object, remote = data.remote, part = part, index = k })
+            cursor += 1
         end
+        return arr
+    end
+
+    local head  = take(1, "head")
+    local body  = take(1, "body")
+    local armL  = take(3, "armL")
+    local armR  = take(3, "armR")
+    local legL  = take(2, "legL")
+    local legR  = take(2, "legR")
+
+    for _, list in ipairs({head, body, armL, armR, legL, legR}) do
+        for _, slot in ipairs(list) do table.insert(assignedSlots, slot) end
+    end
+
+    -- sisa prop -> aura
+    local auraIndex = 1
+    while myProps[cursor] do
+        local data = myProps[cursor]
         table.insert(assignedSlots, {
             object = data.object,
             remote = data.remote,
-            offset = offset,
+            part = "aura",
+            index = auraIndex,
         })
+        auraIndex += 1
+        cursor += 1
     end
+
     info.Text = "Prop: " .. #myProps .. " | Slot tubuh: " .. #assignedSlots
+end
+
+listen(scanBtn.MouseButton1Click:Connect(function()
+    task.defer(assignSlots)
+end))
+
+--====================================================
+-- POSISI LOKAL TIAP BAGIAN TUBUH (unit lokal × skala)
+-- X = kanan/kiri, Y = atas/bawah, Z = depan/belakang
+--====================================================
+local function slotLocalPos(slot, scale, phase)
+    local p = slot.part
+    local i = slot.index
+
+    if p == "head" then
+        return Vector3.new(0, 9, 0) * scale
+    elseif p == "body" then
+        return Vector3.new(0, 5, 0) * scale
+    elseif p == "armL" then
+        -- tangan kiri: menjulur ke samping kiri + naik, berayun naik-turun
+        local swing = math.sin(phase) * 0.5
+        local base = Vector3.new(-3 - i * 1.2, 6 - i * 1.5 + swing, 0)
+        return base * scale
+    elseif p == "armR" then
+        local swing = math.sin(phase + math.pi) * 0.5
+        local base = Vector3.new(3 + i * 1.2, 6 - i * 1.5 + swing, 0)
+        return base * scale
+    elseif p == "legL" then
+        -- kaki kiri: lurus ke bawah, i=1 lebih tinggi
+        local swing = math.sin(phase) * 0.3
+        local base = Vector3.new(-1.8, 3 - i * 1.4, swing)
+        return base * scale
+    elseif p == "legR" then
+        local swing = math.sin(phase + math.pi) * 0.3
+        local base = Vector3.new(1.8, 3 - i * 1.4, swing)
+        return base * scale
+    elseif p == "aura" then
+        local angle = i * 1.3 + phase * 0.5
+        local radius = 7
+        local base = Vector3.new(
+            math.cos(angle) * radius,
+            5 + math.sin(angle * 2) * 1.5,
+            math.sin(angle) * radius
+        )
+        return base * scale
+    end
+    return Vector3.zero
 end
 
 --====================================================
 -- UPDATE MONSTER
 --====================================================
-local function updateMonster(centerCF, scale, heightOffset)
+local function updateMonster(centerCF, scale, heightOffset, phase)
     local okCount, errCount = 0, 0
     for _, slot in ipairs(assignedSlots) do
         local obj = slot.object
         local remote = slot.remote
         if obj and obj.Parent and remote and remote.Parent and remote:IsA("RemoteFunction") then
-            local localPos = slot.offset * scale + Vector3.new(0, heightOffset, 0)
+            local localPos = slotLocalPos(slot, scale, phase) + Vector3.new(0, heightOffset, 0)
             local worldPos = centerCF * localPos
             local goalCF = CFrame.new(worldPos) * centerCF.Rotation
             local ok = pcall(function() remote:InvokeServer(goalCF) end)
@@ -381,7 +407,8 @@ local function startFollow()
     setStatus("Monster mengikuti kamu | skala " .. scale)
 
     local lastStatusTime = 0
-    listen(RunService.Heartbeat:Connect(function()
+    animPhase = 0
+    listen(RunService.Heartbeat:Connect(function(dt)
         if not followRunning or followToken ~= myToken then return end
         if not gui.Parent then stopAll() return end
 
@@ -395,11 +422,13 @@ local function startFollow()
             return
         end
 
-        -- posisi monster di belakang player
+        animPhase += dt * 4 -- kecepatan animasi ayunan
+
+        -- monster di belakang player, menghadap arah yang sama dengan player
         local back = root.CFrame.LookVector * -distance
         local centerPos = root.Position + back
         local centerCF = CFrame.new(centerPos, centerPos + root.CFrame.LookVector)
-        local okCount, errCount = updateMonster(centerCF, scale, heightOffset)
+        local okCount, errCount = updateMonster(centerCF, scale, heightOffset, animPhase)
 
         if os.clock() - lastStatusTime > 0.5 then
             setStatus(string.format("Monster ON | OK: %d | Err: %d", okCount, errCount))
@@ -414,7 +443,6 @@ local function startAttack()
     if #assignedSlots == 0 then assignSlots() end
 
     local target = nil
-    -- target = pemain terdekat selain diri sendiri
     local myChar = localPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local myPos = myRoot and myRoot.Position or Vector3.zero
@@ -446,7 +474,8 @@ local function startAttack()
     setStatus("Monster mengejar @" .. target.Name)
 
     local lastStatusTime = 0
-    listen(RunService.Heartbeat:Connect(function()
+    animPhase = 0
+    listen(RunService.Heartbeat:Connect(function(dt)
         if not attackRunning or followToken ~= myToken then return end
         if not gui.Parent then stopAll() return end
         if target.Parent ~= Players then stopAll(); setStatus("Target keluar.") return end
@@ -462,11 +491,12 @@ local function startAttack()
             return
         end
 
-        -- monster berdiri di belakang target
+        animPhase += dt * 6
+
         local back = tRoot.CFrame.LookVector * -distance
         local centerPos = tRoot.Position + back
         local centerCF = CFrame.new(centerPos, tRoot.Position)
-        local okCount, errCount = updateMonster(centerCF, scale, heightOffset)
+        local okCount, errCount = updateMonster(centerCF, scale, heightOffset, animPhase)
 
         if os.clock() - lastStatusTime > 0.5 then
             setStatus(string.format("Kejar @%s | OK: %d | Err: %d",
@@ -481,11 +511,6 @@ listen(followBtn.MouseButton1Click:Connect(function()
 end))
 listen(attackBtn.MouseButton1Click:Connect(function()
     if attackRunning then stopAll() else startAttack() end
-end))
-
--- Assign slot otomatis setiap kali scan
-listen(scanBtn.MouseButton1Click:Connect(function()
-    task.defer(assignSlots)
 end))
 
 --====================================================
@@ -531,4 +556,4 @@ gui.Destroying:Connect(function()
 end)
 
 setStatus("Siap | Tekan SCAN SEMUA PROP SAYA")
-print("[XLORD Giant Monster] Loaded")
+print("[XLORD Giant Monster | Custom Skeleton] Loaded")
