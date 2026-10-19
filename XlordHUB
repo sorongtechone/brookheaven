@@ -10,69 +10,60 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 --====================================================
--- ANTI SIT
+-- ANTI SIT (gaya script pertama: SetStateEnabled + GettingUp loop)
 --====================================================
 local antiSitEnabled = false
-local antiSitHumanoidConnection = nil
+local antiSitLoopActive = false
 local antiSitCharacterConnection = nil
 
-local function monitorAntiSitCharacter(character)
-    if not antiSitEnabled or not character then
-        return
-    end
-
-    if antiSitHumanoidConnection then
-        antiSitHumanoidConnection:Disconnect()
-        antiSitHumanoidConnection = nil
-    end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-        or character:WaitForChild("Humanoid", 5)
-
-    if not humanoid or not antiSitEnabled then
-        return
-    end
-
-    antiSitHumanoidConnection =
-        humanoid:GetPropertyChangedSignal("Sit"):Connect(function()
-            if antiSitEnabled
-                and humanoid.Parent
-                and humanoid.Sit then
-                humanoid.Sit = false
+local function antiSitLoop()
+    if antiSitLoopActive then return end
+    antiSitLoopActive = true
+    task.spawn(function()
+        while antiSitEnabled do
+            local character = Players.LocalPlayer.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+                if humanoid:GetState() == Enum.HumanoidStateType.Seated then
+                    pcall(function()
+                        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                    end)
+                end
+                if humanoid.Sit then
+                    humanoid.Sit = false
+                end
             end
-        end)
-
-    if humanoid.Sit then
-        humanoid.Sit = false
-    end
+            task.wait(0.05)
+        end
+        -- Restore saat dimatikan
+        local character = Players.LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+        end
+        antiSitLoopActive = false
+    end)
 end
 
 local function setAntiSit(enabled)
     antiSitEnabled = enabled
 
-    if not enabled then
-        if antiSitHumanoidConnection then
-            antiSitHumanoidConnection:Disconnect()
-            antiSitHumanoidConnection = nil
+    if enabled then
+        antiSitLoop()
+        if not antiSitCharacterConnection then
+            antiSitCharacterConnection =
+                Players.LocalPlayer.CharacterAdded:Connect(function()
+                    if antiSitEnabled then
+                        task.defer(antiSitLoop)
+                    end
+                end)
         end
-
+    else
         if antiSitCharacterConnection then
             antiSitCharacterConnection:Disconnect()
             antiSitCharacterConnection = nil
         end
-
-        return
-    end
-
-    monitorAntiSitCharacter(Players.LocalPlayer.Character)
-
-    if not antiSitCharacterConnection then
-        antiSitCharacterConnection =
-            Players.LocalPlayer.CharacterAdded:Connect(function(character)
-                task.defer(function()
-                    monitorAntiSitCharacter(character)
-                end)
-            end)
     end
 end
 
@@ -632,22 +623,22 @@ coordHide.Position = UDim2.new(1, -34, 0, 15)
 coordHide.TextSize = 16
 coordHide.ZIndex = 111
 
-local coordMini = button(gui, "ExpandXYZ", "XYZ", COLORS.blue)
-coordMini.AnchorPoint = Vector2.new(0.5, 0)
-coordMini.Position = UDim2.new(0.5, 0, 0, 10)
-coordMini.Size = UDim2.fromOffset(70, 30)
-coordMini.ZIndex = 110
-coordMini.Visible = false
-coordMini.Parent = gui
+-- Tombol XYZ di header sekarang jadi toggle HUD (tidak ada tombol melayang)
+local function setXYZVisible(state)
+    coordHUD.Visible = state
+    xyzButton.BackgroundColor3 = state and COLORS.green or COLORS.blue
+end
 
 listen(coordHide.MouseButton1Click:Connect(function()
-    coordHUD.Visible = false
-    coordMini.Visible = true
+    setXYZVisible(false)
 end))
-listen(coordMini.MouseButton1Click:Connect(function()
-    coordMini.Visible = false
-    coordHUD.Visible = true
+
+listen(xyzButton.MouseButton1Click:Connect(function()
+    setXYZVisible(not coordHUD.Visible)
 end))
+
+-- Default: HUD disembunyikan; bisa kamu ubah ke true kalau mau muncul otomatis
+setXYZVisible(false)
 
 local function xyz(position)
     return string.format("X: %.1f   Y: %.1f   Z: %.1f",
