@@ -1,7 +1,7 @@
 --====================================================
--- XLORD PROP ARMY | MOVE ALL MY PROPS
--- Semua prop milikmu mengikuti kamu dengan formasi grid
--- dan jarak spasi antar prop.
+-- XLORD PROP ARMY | SNAKE FOLLOW
+-- Semua prop milikmu mengikuti kamu seperti ular.
+-- Prop #1 paling dekat, #2 ikut #1, #3 ikut #2, dst.
 --====================================================
 
 local Players = game:GetService("Players")
@@ -11,7 +11,6 @@ local UserInputService = game:GetService("UserInputService")
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
--- Bersihkan GUI lama
 for _, child in ipairs(playerGui:GetChildren()) do
     if child:IsA("ScreenGui") and child.Name:find("XLORD_PropArmy") then
         child:Destroy()
@@ -39,7 +38,6 @@ local COLORS = {
     red = Color3.fromRGB(205, 55, 65),
     gray = Color3.fromRGB(70, 74, 92),
     purple = Color3.fromRGB(119, 74, 190),
-    orange = Color3.fromRGB(185, 105, 38),
 }
 
 local function button(parent, name, caption, color)
@@ -72,7 +70,7 @@ local main = Instance.new("Frame")
 main.Name = "Main"
 main.AnchorPoint = Vector2.new(0, 0)
 main.Position = UDim2.fromOffset(20, 20)
-main.Size = UDim2.fromOffset(290, 380)
+main.Size = UDim2.fromOffset(300, 400)
 main.BackgroundColor3 = COLORS.panel
 main.BackgroundTransparency = 0.1
 main.BorderSizePixel = 0
@@ -83,9 +81,9 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "PROP ARMY | FOLLOW"
+header.Text = "PROP SNAKE | FOLLOW"
 header.Position = UDim2.fromOffset(10, 0)
-header.Size = UDim2.fromOffset(200, 40)
+header.Size = UDim2.fromOffset(220, 40)
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 14
@@ -95,136 +93,80 @@ header.Parent = main
 
 local closeBtn = button(main, "Close", "X", COLORS.red)
 closeBtn.Size = UDim2.fromOffset(28, 28)
-closeBtn.Position = UDim2.fromOffset(252, 6)
+closeBtn.Position = UDim2.fromOffset(262, 6)
 
---====================================================
--- KONTROL
---====================================================
 local scanBtn = button(main, "Scan", "SCAN SEMUA PROP SAYA", COLORS.purple)
 scanBtn.Position = UDim2.fromOffset(10, 46)
-scanBtn.Size = UDim2.fromOffset(270, 32)
+scanBtn.Size = UDim2.fromOffset(280, 32)
 
-local toggleBtn = button(main, "Toggle", "MULAI FOLLOW: OFF", COLORS.green)
+local toggleBtn = button(main, "Toggle", "MULAI SNAKE: OFF", COLORS.green)
 toggleBtn.Position = UDim2.fromOffset(10, 84)
-toggleBtn.Size = UDim2.fromOffset(270, 36)
+toggleBtn.Size = UDim2.fromOffset(280, 36)
 
--- Pengaturan jarak
-local spacingLabel = Instance.new("TextLabel")
-spacingLabel.BackgroundTransparency = 1
-spacingLabel.Text = "Jarak antar prop (studs):"
-spacingLabel.Position = UDim2.fromOffset(10, 128)
-spacingLabel.Size = UDim2.fromOffset(270, 18)
-spacingLabel.TextXAlignment = Enum.TextXAlignment.Left
-spacingLabel.TextColor3 = Color3.fromRGB(200, 205, 220)
-spacingLabel.TextSize = 11
-spacingLabel.Font = Enum.Font.Gotham
-spacingLabel.Parent = main
+-- Parameter ular
+local function makeField(labelText, defaultText, x, y, w)
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Text = labelText
+    lbl.Position = UDim2.fromOffset(x, y)
+    lbl.Size = UDim2.fromOffset(w, 16)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextColor3 = Color3.fromRGB(200, 205, 220)
+    lbl.TextSize = 10
+    lbl.Font = Enum.Font.Gotham
+    lbl.Parent = main
+    local box = Instance.new("TextBox")
+    box.BackgroundColor3 = COLORS.field
+    box.BorderSizePixel = 0
+    box.Text = defaultText
+    box.Position = UDim2.fromOffset(x, y + 17)
+    box.Size = UDim2.fromOffset(w, 26)
+    box.TextColor3 = Color3.new(1, 1, 1)
+    box.TextSize = 11
+    box.Font = Enum.Font.Gotham
+    box.ClearTextOnFocus = false
+    box.Parent = main
+    round(box, 6)
+    return box
+end
 
-local spacingBox = Instance.new("TextBox")
-spacingBox.Name = "SpacingBox"
-spacingBox.BackgroundColor3 = COLORS.field
-spacingBox.BorderSizePixel = 0
-spacingBox.Text = "6"
-spacingBox.Position = UDim2.fromOffset(10, 148)
-spacingBox.Size = UDim2.fromOffset(80, 28)
-spacingBox.TextColor3 = Color3.new(1, 1, 1)
-spacingBox.PlaceholderText = "studs"
-spacingBox.TextSize = 12
-spacingBox.Font = Enum.Font.Gotham
-spacingBox.ClearTextOnFocus = false
-spacingBox.Parent = main
-round(spacingBox, 7)
+local spacingBox = makeField("Spasi antar prop:", "5", 10, 128, 88)
+local historyBox = makeField("Titik trail:", "80", 106, 128, 88)
+local heightBox  = makeField("Tinggi prop:", "3", 202, 128, 88)
 
--- Baris grid
-local rowLabel = Instance.new("TextLabel")
-rowLabel.BackgroundTransparency = 1
-rowLabel.Text = "Prop per baris:"
-rowLabel.Position = UDim2.fromOffset(100, 128)
-rowLabel.Size = UDim2.fromOffset(180, 18)
-rowLabel.TextXAlignment = Enum.TextXAlignment.Left
-rowLabel.TextColor3 = Color3.fromRGB(200, 205, 220)
-rowLabel.TextSize = 11
-rowLabel.Font = Enum.Font.Gotham
-rowLabel.Parent = main
-
-local rowBox = Instance.new("TextBox")
-rowBox.Name = "RowBox"
-rowBox.BackgroundColor3 = COLORS.field
-rowBox.BorderSizePixel = 0
-rowBox.Text = "3"
-rowBox.Position = UDim2.fromOffset(100, 148)
-rowBox.Size = UDim2.fromOffset(80, 28)
-rowBox.TextColor3 = Color3.new(1, 1, 1)
-rowBox.PlaceholderText = "jumlah"
-rowBox.TextSize = 12
-rowBox.Font = Enum.Font.Gotham
-rowBox.ClearTextOnFocus = false
-rowBox.Parent = main
-round(rowBox, 7)
-
--- Offset tinggi (biar prop tidak tenggelam)
-local heightLabel = Instance.new("TextLabel")
-heightLabel.BackgroundTransparency = 1
-heightLabel.Text = "Offset tinggi (studs):"
-heightLabel.Position = UDim2.fromOffset(190, 128)
-heightLabel.Size = UDim2.fromOffset(90, 18)
-heightLabel.TextXAlignment = Enum.TextXAlignment.Left
-heightLabel.TextColor3 = Color3.fromRGB(200, 205, 220)
-heightLabel.TextSize = 11
-heightLabel.Font = Enum.Font.Gotham
-heightLabel.Parent = main
-
-local heightBox = Instance.new("TextBox")
-heightBox.Name = "HeightBox"
-heightBox.BackgroundColor3 = COLORS.field
-heightBox.BorderSizePixel = 0
-heightBox.Text = "3"
-heightBox.Position = UDim2.fromOffset(190, 148)
-heightBox.Size = UDim2.fromOffset(80, 28)
-heightBox.TextColor3 = Color3.new(1, 1, 1)
-heightBox.PlaceholderText = "studs"
-heightBox.TextSize = 12
-heightBox.Font = Enum.Font.Gotham
-heightBox.ClearTextOnFocus = false
-heightBox.Parent = main
-round(heightBox, 7)
-
--- Info
 local info = Instance.new("TextLabel")
 info.Name = "Info"
 info.BackgroundTransparency = 1
 info.Text = "Prop terdeteksi: 0"
-info.Position = UDim2.fromOffset(10, 184)
-info.Size = UDim2.fromOffset(270, 20)
+info.Position = UDim2.fromOffset(10, 178)
+info.Size = UDim2.fromOffset(280, 20)
 info.TextXAlignment = Enum.TextXAlignment.Left
 info.TextColor3 = Color3.fromRGB(140, 205, 255)
 info.TextSize = 12
 info.Font = Enum.Font.GothamBold
 info.Parent = main
 
--- List prop (scrolling)
 local listFrame = Instance.new("ScrollingFrame")
 listFrame.Name = "PropList"
 listFrame.BackgroundColor3 = COLORS.list
 listFrame.BorderSizePixel = 0
-listFrame.Position = UDim2.fromOffset(10, 208)
-listFrame.Size = UDim2.fromOffset(270, 120)
+listFrame.Position = UDim2.fromOffset(10, 202)
+listFrame.Size = UDim2.fromOffset(280, 130)
 listFrame.ScrollBarThickness = 4
 listFrame.CanvasSize = UDim2.fromOffset(0, 0)
 listFrame.Parent = main
 round(listFrame, 8)
 
 local listLayout = Instance.new("UIListLayout")
-listLayout.Padding = UDim.new(0, 4)
+listLayout.Padding = UDim.new(0, 3)
 listLayout.Parent = listFrame
 
--- Status
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
 status.Text = "Siap | Scan prop dulu"
-status.Position = UDim2.fromOffset(10, 334)
-status.Size = UDim2.fromOffset(270, 38)
+status.Position = UDim2.fromOffset(10, 340)
+status.Size = UDim2.fromOffset(280, 48)
 status.TextWrapped = true
 status.TextXAlignment = Enum.TextXAlignment.Left
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
@@ -239,13 +181,14 @@ end
 --====================================================
 -- STATE
 --====================================================
-local myProps = {}          -- {object, remote, offsetY}
+local myProps = {}
 local followRunning = false
 local followToken = 0
 local propConnections = {}
+local trail = {} -- riwayat posisi root player (Vector3)
 
 --====================================================
--- SCAN PROP MILIK SENDIRI
+-- SCAN PROP
 --====================================================
 local function scanMyProps()
     myProps = {}
@@ -264,15 +207,11 @@ local function scanMyProps()
         local name = obj.Name:lower()
         local remote = obj:FindFirstChild("SetCurrentCFrame", true)
         if not remote or not remote:IsA("RemoteFunction") then return end
-        -- cek kepemilikan
         local ownerMatch = name == ownedName
             or (name:find("prop", 1, true) and name:find(username, 1, true))
         if not ownerMatch then return end
         seen[obj] = true
-        table.insert(myProps, {
-            object = obj,
-            remote = remote,
-        })
+        table.insert(myProps, { object = obj, remote = remote })
     end
 
     for _, folder in ipairs(folders) do
@@ -282,12 +221,10 @@ local function scanMyProps()
         end
     end
 
-    -- urutkan berdasarkan nama biar stabil
     table.sort(myProps, function(a, b)
         return a.object.Name:lower() < b.object.Name:lower()
     end)
 
-    -- tampilkan di list
     for _, child in ipairs(listFrame:GetChildren()) do
         if child:IsA("TextLabel") then child:Destroy() end
     end
@@ -304,64 +241,75 @@ local function scanMyProps()
         lbl.Parent = listFrame
         round(lbl, 4)
     end
-    listFrame.CanvasSize = UDim2.fromOffset(0, #myProps * 26 + 8)
+    listFrame.CanvasSize = UDim2.fromOffset(0, #myProps * 25 + 6)
     info.Text = "Prop terdeteksi: " .. #myProps
     setStatus(#myProps > 0
-        and ("Ditemukan " .. #myProps .. " prop milikmu. Atur jarak lalu MULAI.")
+        and ("Ditemukan " .. #myProps .. " prop. Atur lalu MULAI SNAKE.")
         or "Tidak ada prop milikmu. Spawn prop manual dahulu.")
 end
 
 listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
 
 --====================================================
--- HITUNG POSISI GRID
+-- TRAIL HELPER
 --====================================================
--- Posisi grid relatif terhadap root player, di belakang player.
--- Grid: rowBox prop per baris, spacingBox jarak antar prop.
-local function computeGridPosition(index, total, rootCF, spacing, perRow, heightOffset)
-    local row = math.floor((index - 1) / perRow)
-    local col = (index - 1) % perRow
-    -- center kolom
-    local rowCount = math.min(perRow, total - row * perRow)
-    local colOffset = (col - (rowCount - 1) / 2) * spacing
-    -- baris ke belakang (di belakang player)
-    local backOffset = (row + 1) * spacing
-    -- local space: X = kiri/kanan, Z = belakang (negatif karena LookVector ke depan)
-    local localPos = Vector3.new(colOffset, heightOffset, -backOffset)
-    return rootCF * localPos
+local function pushTrail(pos, maxLen)
+    table.insert(trail, 1, pos)
+    while #trail > maxLen do
+        table.remove(trail)
+    end
+end
+
+-- Ambil posisi trail ke-N (dalam studs di belakang), fallback ke posisi terakhir
+local function trailAt(distanceStuds, spacing, rootPos)
+    -- kita pakai index berdasar spacing: tiap prop butuh spacing studs di trail.
+    -- trail disimpan tiap frame, jadi jarak tempuh per frame bervariasi.
+    -- Solusi: cari titik trail yang jarak kumulatifnya >= distanceStuds.
+    if #trail == 0 then return rootPos end
+    local needed = distanceStuds
+    local acc = 0
+    local prev = rootPos
+    for i = 1, #trail do
+        local p = trail[i]
+        acc += (prev - p).Magnitude
+        if acc >= needed then
+            return p
+        end
+        prev = p
+    end
+    -- kalau trail kurang panjang, pakai titik terakhir
+    return trail[#trail]
 end
 
 --====================================================
--- FOLLOW LOOP
+-- SNAKE FOLLOW
 --====================================================
 local function stopFollow()
     followRunning = false
     followToken += 1
-    toggleBtn.Text = "MULAI FOLLOW: OFF"
+    toggleBtn.Text = "MULAI SNAKE: OFF"
     toggleBtn.BackgroundColor3 = COLORS.green
-    setStatus("Follow dihentikan.")
+    setStatus("Snake dihentikan.")
 end
 
 local function startFollow()
     if followRunning then return end
-    if #myProps == 0 then
-        setStatus("Scan prop dulu sebelum mulai.")
-        return
-    end
+    if #myProps == 0 then setStatus("Scan prop dulu.") return end
 
-    local spacing = math.clamp(tonumber(spacingBox.Text) or 6, 1, 40)
-    local perRow = math.clamp(math.floor(tonumber(rowBox.Text) or 3), 1, 20)
+    local spacing = math.clamp(tonumber(spacingBox.Text) or 5, 1, 40)
+    local maxTrail = math.clamp(math.floor(tonumber(historyBox.Text) or 80), 20, 400)
     local heightOffset = math.clamp(tonumber(heightBox.Text) or 3, -10, 30)
+
+    -- reset trail
+    trail = {}
 
     followRunning = true
     followToken += 1
     local myToken = followToken
-    toggleBtn.Text = "STOP FOLLOW"
+    toggleBtn.Text = "STOP SNAKE"
     toggleBtn.BackgroundColor3 = COLORS.red
-    setStatus("Follow ON | " .. #myProps .. " prop | jarak " .. spacing .. " studs")
+    setStatus("Snake ON | " .. #myProps .. " prop | spasi " .. spacing)
 
-    local total = #myProps
-    -- counter untuk throttle status
     local lastStatusTime = 0
 
     listen(RunService.Heartbeat:Connect(function()
@@ -378,20 +326,27 @@ local function startFollow()
             return
         end
 
-        local rootCF = root.CFrame
+        local rootPos = root.Position
+        pushTrail(rootPos, maxTrail)
+
         local okCount, errCount = 0, 0
+        local total = #myProps
 
         for i, data in ipairs(myProps) do
             local obj = data.object
             local remote = data.remote
             if obj and obj.Parent and remote and remote.Parent and remote:IsA("RemoteFunction") then
-                local goalPos = computeGridPosition(i, total, rootCF, spacing, perRow, heightOffset)
-                -- pertahankan rotasi asli prop
+                -- prop ke-i berjarak (i * spacing) studs dari player di trail
+                local targetPos = trailAt(i * spacing, spacing, rootPos)
+                targetPos = targetPos + Vector3.new(0, heightOffset, 0)
+
+                -- pertahankan rotasi asli
                 local okRot, origCF = pcall(function() return obj:GetPivot() end)
-                local goalCF = CFrame.new(goalPos)
+                local goalCF = CFrame.new(targetPos)
                 if okRot then
-                    goalCF = CFrame.new(goalPos) * origCF.Rotation
+                    goalCF = CFrame.new(targetPos) * origCF.Rotation
                 end
+
                 local ok = pcall(function() remote:InvokeServer(goalCF) end)
                 if ok then okCount += 1 else errCount += 1 end
             else
@@ -400,7 +355,8 @@ local function startFollow()
         end
 
         if os.clock() - lastStatusTime > 0.5 then
-            setStatus(string.format("Follow ON | OK: %d | Error: %d", okCount, errCount))
+            setStatus(string.format("Snake ON | OK: %d | Error: %d | Trail: %d",
+                okCount, errCount, #trail))
             lastStatusTime = os.clock()
         end
     end))
@@ -414,7 +370,6 @@ end))
 -- DRAG
 --====================================================
 local dragging = false
-local dragInput
 local dragStart
 local startPos
 listen(header.InputBegan:Connect(function(input)
@@ -442,19 +397,12 @@ listen(UserInputService.InputChanged:Connect(function(input)
     end
 end))
 
---====================================================
--- CLOSE
---====================================================
-listen(closeBtn.MouseButton1Click:Connect(function()
-    gui:Destroy()
-end))
+listen(closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end))
 
 gui.Destroying:Connect(function()
     followRunning = false
     followToken += 1
-    for _, c in ipairs(propConnections) do
-        pcall(function() c:Disconnect() end)
-    end
+    for _, c in ipairs(propConnections) do pcall(function() c:Disconnect() end) end
     for _, c in ipairs(connections) do
         if c.Connected then c:Disconnect() end
     end
@@ -462,4 +410,4 @@ gui.Destroying:Connect(function()
 end)
 
 setStatus("Siap | Tekan SCAN SEMUA PROP SAYA")
-print("[XLORD Prop Army] Loaded")
+print("[XLORD Prop Snake] Loaded")
