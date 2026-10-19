@@ -1,7 +1,7 @@
 --====================================================
--- XLORD PROP ARMY | SNAKE FOLLOW
--- Semua prop milikmu mengikuti kamu seperti ular.
--- Prop #1 paling dekat, #2 ikut #1, #3 ikut #2, dst.
+-- XLORD GIANT MONSTER | PROP ASSEMBLY
+-- Gabungkan semua prop milikmu jadi monster raksasa.
+-- Prop disusun jadi tubuh monster, grup bergerak mengikuti kamu.
 --====================================================
 
 local Players = game:GetService("Players")
@@ -12,16 +12,13 @@ local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
 for _, child in ipairs(playerGui:GetChildren()) do
-    if child:IsA("ScreenGui") and child.Name:find("XLORD_PropArmy") then
+    if child:IsA("ScreenGui") and child.Name:find("XLORD_GiantMonster") then
         child:Destroy()
     end
 end
 
 local connections = {}
-local function listen(conn)
-    table.insert(connections, conn)
-    return conn
-end
+local function listen(conn) table.insert(connections, conn); return conn end
 
 local function round(obj, r)
     local c = Instance.new("UICorner")
@@ -38,6 +35,7 @@ local COLORS = {
     red = Color3.fromRGB(205, 55, 65),
     gray = Color3.fromRGB(70, 74, 92),
     purple = Color3.fromRGB(119, 74, 190),
+    orange = Color3.fromRGB(185, 105, 38),
 }
 
 local function button(parent, name, caption, color)
@@ -59,7 +57,7 @@ end
 -- GUI
 --====================================================
 local gui = Instance.new("ScreenGui")
-gui.Name = "XLORD_PropArmy"
+gui.Name = "XLORD_GiantMonster"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.DisplayOrder = 999
@@ -70,7 +68,7 @@ local main = Instance.new("Frame")
 main.Name = "Main"
 main.AnchorPoint = Vector2.new(0, 0)
 main.Position = UDim2.fromOffset(20, 20)
-main.Size = UDim2.fromOffset(300, 400)
+main.Size = UDim2.fromOffset(310, 460)
 main.BackgroundColor3 = COLORS.panel
 main.BackgroundTransparency = 0.1
 main.BorderSizePixel = 0
@@ -81,9 +79,9 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "PROP SNAKE | FOLLOW"
+header.Text = "GIANT MONSTER | PROP"
 header.Position = UDim2.fromOffset(10, 0)
-header.Size = UDim2.fromOffset(220, 40)
+header.Size = UDim2.fromOffset(230, 40)
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 14
@@ -93,17 +91,21 @@ header.Parent = main
 
 local closeBtn = button(main, "Close", "X", COLORS.red)
 closeBtn.Size = UDim2.fromOffset(28, 28)
-closeBtn.Position = UDim2.fromOffset(262, 6)
+closeBtn.Position = UDim2.fromOffset(272, 6)
 
 local scanBtn = button(main, "Scan", "SCAN SEMUA PROP SAYA", COLORS.purple)
 scanBtn.Position = UDim2.fromOffset(10, 46)
-scanBtn.Size = UDim2.fromOffset(280, 32)
+scanBtn.Size = UDim2.fromOffset(290, 32)
 
-local toggleBtn = button(main, "Toggle", "MULAI SNAKE: OFF", COLORS.green)
-toggleBtn.Position = UDim2.fromOffset(10, 84)
-toggleBtn.Size = UDim2.fromOffset(280, 36)
+local followBtn = button(main, "Follow", "FOLLOW SAYA: OFF", COLORS.green)
+followBtn.Position = UDim2.fromOffset(10, 84)
+followBtn.Size = UDim2.fromOffset(140, 34)
 
--- Parameter ular
+local attackBtn = button(main, "Attack", "KEJAR TARGET: OFF", COLORS.orange)
+attackBtn.Position = UDim2.fromOffset(160, 84)
+attackBtn.Size = UDim2.fromOffset(140, 34)
+
+-- Parameter
 local function makeField(labelText, defaultText, x, y, w)
     local lbl = Instance.new("TextLabel")
     lbl.BackgroundTransparency = 1
@@ -130,16 +132,16 @@ local function makeField(labelText, defaultText, x, y, w)
     return box
 end
 
-local spacingBox = makeField("Spasi antar prop:", "5", 10, 128, 88)
-local historyBox = makeField("Titik trail:", "80", 106, 128, 88)
-local heightBox  = makeField("Tinggi prop:", "3", 202, 128, 88)
+local scaleBox  = makeField("Skala monster:", "3", 10, 126, 92)
+local distBox   = makeField("Jarak ke kamu:", "8", 110, 126, 92)
+local heightBox = makeField("Tinggi:", "2", 210, 126, 92)
 
 local info = Instance.new("TextLabel")
 info.Name = "Info"
 info.BackgroundTransparency = 1
-info.Text = "Prop terdeteksi: 0"
-info.Position = UDim2.fromOffset(10, 178)
-info.Size = UDim2.fromOffset(280, 20)
+info.Text = "Prop: 0 | Slot tubuh: 0"
+info.Position = UDim2.fromOffset(10, 176)
+info.Size = UDim2.fromOffset(290, 20)
 info.TextXAlignment = Enum.TextXAlignment.Left
 info.TextColor3 = Color3.fromRGB(140, 205, 255)
 info.TextSize = 12
@@ -150,8 +152,8 @@ local listFrame = Instance.new("ScrollingFrame")
 listFrame.Name = "PropList"
 listFrame.BackgroundColor3 = COLORS.list
 listFrame.BorderSizePixel = 0
-listFrame.Position = UDim2.fromOffset(10, 202)
-listFrame.Size = UDim2.fromOffset(280, 130)
+listFrame.Position = UDim2.fromOffset(10, 200)
+listFrame.Size = UDim2.fromOffset(290, 190)
 listFrame.ScrollBarThickness = 4
 listFrame.CanvasSize = UDim2.fromOffset(0, 0)
 listFrame.Parent = main
@@ -165,8 +167,8 @@ local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
 status.Text = "Siap | Scan prop dulu"
-status.Position = UDim2.fromOffset(10, 340)
-status.Size = UDim2.fromOffset(280, 48)
+status.Position = UDim2.fromOffset(10, 396)
+status.Size = UDim2.fromOffset(290, 56)
 status.TextWrapped = true
 status.TextXAlignment = Enum.TextXAlignment.Left
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
@@ -182,16 +184,18 @@ end
 -- STATE
 --====================================================
 local myProps = {}
+local assignedSlots = {}   -- {prop, remote, offset Local}
 local followRunning = false
+local attackRunning = false
 local followToken = 0
 local propConnections = {}
-local trail = {} -- riwayat posisi root player (Vector3)
 
 --====================================================
 -- SCAN PROP
 --====================================================
 local function scanMyProps()
     myProps = {}
+    assignedSlots = {}
     local seen = {}
     local username = localPlayer.Name:lower()
     local ownedName = "prop" .. username
@@ -242,79 +246,144 @@ local function scanMyProps()
         round(lbl, 4)
     end
     listFrame.CanvasSize = UDim2.fromOffset(0, #myProps * 25 + 6)
-    info.Text = "Prop terdeteksi: " .. #myProps
+    info.Text = "Prop: " .. #myProps .. " | Slot tubuh: 0"
     setStatus(#myProps > 0
-        and ("Ditemukan " .. #myProps .. " prop. Atur lalu MULAI SNAKE.")
+        and ("Ditemukan " .. #myProps .. " prop. Atur skala lalu FOLLOW.")
         or "Tidak ada prop milikmu. Spawn prop manual dahulu.")
 end
 
 listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
 
 --====================================================
--- TRAIL HELPER
+-- SKELETON MONSTER (slot tubuh dalam unit lokal)
+-- Koordinat lokal: X = kanan/kiri, Y = atas/bawah, Z = depan/belakang
+-- (dikalikan skala saat dipakai)
 --====================================================
-local function pushTrail(pos, maxLen)
-    table.insert(trail, 1, pos)
-    while #trail > maxLen do
-        table.remove(trail)
+local function buildSkeleton()
+    local S = {}
+    -- Kepala (1 prop)
+    table.insert(S, Vector3.new(0, 8, 0))
+    -- Badan (tumpuk vertikal)
+    table.insert(S, Vector3.new(0, 6, 0))
+    table.insert(S, Vector3.new(0, 4.5, 0))
+    table.insert(S, Vector3.new(0, 3, 0))
+    -- Tangan kiri
+    table.insert(S, Vector3.new(-3, 5.5, 0))
+    table.insert(S, Vector3.new(-5, 4.5, 0))
+    table.insert(S, Vector3.new(-7, 3.5, 0))
+    -- Tangan kanan
+    table.insert(S, Vector3.new(3, 5.5, 0))
+    table.insert(S, Vector3.new(5, 4.5, 0))
+    table.insert(S, Vector3.new(7, 3.5, 0))
+    -- Kaki kiri
+    table.insert(S, Vector3.new(-1.8, 1.5, 0))
+    table.insert(S, Vector3.new(-1.8, 0, 0))
+    -- Kaki kanan
+    table.insert(S, Vector3.new(1.8, 1.5, 0))
+    table.insert(S, Vector3.new(1.8, 0, 0))
+    -- Ekor (ke belakang)
+    table.insert(S, Vector3.new(0, 2, 3))
+    table.insert(S, Vector3.new(0, 1.5, 5))
+    table.insert(S, Vector3.new(0, 1, 7))
+    -- Sayap kiri
+    table.insert(S, Vector3.new(-6, 7, -2))
+    table.insert(S, Vector3.new(-9, 8, -3))
+    -- Sayap kanan
+    table.insert(S, Vector3.new(6, 7, -2))
+    table.insert(S, Vector3.new(9, 8, -3))
+    -- Tanduk
+    table.insert(S, Vector3.new(-1.5, 10, 0))
+    table.insert(S, Vector3.new(1.5, 10, 0))
+    -- Tambahan (kalau prop lebih banyak)
+    for i = 1, 30 do
+        local angle = i * 1.1
+        table.insert(S, Vector3.new(
+            math.cos(angle) * 6,
+            5 + math.sin(angle) * 3,
+            math.sin(angle) * 6
+        ))
     end
+    return S
 end
 
--- Ambil posisi trail ke-N (dalam studs di belakang), fallback ke posisi terakhir
-local function trailAt(distanceStuds, spacing, rootPos)
-    -- kita pakai index berdasar spacing: tiap prop butuh spacing studs di trail.
-    -- trail disimpan tiap frame, jadi jarak tempuh per frame bervariasi.
-    -- Solusi: cari titik trail yang jarak kumulatifnya >= distanceStuds.
-    if #trail == 0 then return rootPos end
-    local needed = distanceStuds
-    local acc = 0
-    local prev = rootPos
-    for i = 1, #trail do
-        local p = trail[i]
-        acc += (prev - p).Magnitude
-        if acc >= needed then
-            return p
+local SKELETON = buildSkeleton()
+
+local function assignSlots()
+    assignedSlots = {}
+    for i, data in ipairs(myProps) do
+        local offset = SKELETON[i]
+        if not offset then
+            -- fallback: lingkaran di sekitar badan
+            local angle = i * 1.3
+            offset = Vector3.new(math.cos(angle) * 8, 3, math.sin(angle) * 8)
         end
-        prev = p
+        table.insert(assignedSlots, {
+            object = data.object,
+            remote = data.remote,
+            offset = offset,
+        })
     end
-    -- kalau trail kurang panjang, pakai titik terakhir
-    return trail[#trail]
+    info.Text = "Prop: " .. #myProps .. " | Slot tubuh: " .. #assignedSlots
 end
 
 --====================================================
--- SNAKE FOLLOW
+-- UPDATE MONSTER
 --====================================================
-local function stopFollow()
+local function updateMonster(centerCF, scale, heightOffset)
+    local okCount, errCount = 0, 0
+    for _, slot in ipairs(assignedSlots) do
+        local obj = slot.object
+        local remote = slot.remote
+        if obj and obj.Parent and remote and remote.Parent and remote:IsA("RemoteFunction") then
+            local localPos = slot.offset * scale + Vector3.new(0, heightOffset, 0)
+            local worldPos = centerCF * localPos
+            local goalCF = CFrame.new(worldPos) * centerCF.Rotation
+            local ok = pcall(function() remote:InvokeServer(goalCF) end)
+            if ok then okCount += 1 else errCount += 1 end
+        else
+            errCount += 1
+        end
+    end
+    return okCount, errCount
+end
+
+--====================================================
+-- FOLLOW / ATTACK
+--====================================================
+local function stopAll()
     followRunning = false
+    attackRunning = false
     followToken += 1
-    toggleBtn.Text = "MULAI SNAKE: OFF"
-    toggleBtn.BackgroundColor3 = COLORS.green
-    setStatus("Snake dihentikan.")
+    followBtn.Text = "FOLLOW SAYA: OFF"
+    followBtn.BackgroundColor3 = COLORS.green
+    attackBtn.Text = "KEJAR TARGET: OFF"
+    attackBtn.BackgroundColor3 = COLORS.orange
+    setStatus("Monster dihentikan.")
 end
 
 local function startFollow()
     if followRunning then return end
     if #myProps == 0 then setStatus("Scan prop dulu.") return end
+    if #assignedSlots == 0 then assignSlots() end
 
-    local spacing = math.clamp(tonumber(spacingBox.Text) or 5, 1, 40)
-    local maxTrail = math.clamp(math.floor(tonumber(historyBox.Text) or 80), 20, 400)
-    local heightOffset = math.clamp(tonumber(heightBox.Text) or 3, -10, 30)
+    local scale = math.clamp(tonumber(scaleBox.Text) or 3, 0.5, 20)
+    local distance = math.clamp(tonumber(distBox.Text) or 8, 2, 60)
+    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -10, 40)
 
-    -- reset trail
-    trail = {}
-
+    attackRunning = false
+    attackBtn.Text = "KEJAR TARGET: OFF"
+    attackBtn.BackgroundColor3 = COLORS.orange
     followRunning = true
     followToken += 1
     local myToken = followToken
-    toggleBtn.Text = "STOP SNAKE"
-    toggleBtn.BackgroundColor3 = COLORS.red
-    setStatus("Snake ON | " .. #myProps .. " prop | spasi " .. spacing)
+    followBtn.Text = "FOLLOW SAYA: ON"
+    followBtn.BackgroundColor3 = COLORS.red
+    setStatus("Monster mengikuti kamu | skala " .. scale)
 
     local lastStatusTime = 0
-
     listen(RunService.Heartbeat:Connect(function()
         if not followRunning or followToken ~= myToken then return end
-        if not gui.Parent then stopFollow() return end
+        if not gui.Parent then stopAll() return end
 
         local char = localPlayer.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -326,44 +395,97 @@ local function startFollow()
             return
         end
 
-        local rootPos = root.Position
-        pushTrail(rootPos, maxTrail)
-
-        local okCount, errCount = 0, 0
-        local total = #myProps
-
-        for i, data in ipairs(myProps) do
-            local obj = data.object
-            local remote = data.remote
-            if obj and obj.Parent and remote and remote.Parent and remote:IsA("RemoteFunction") then
-                -- prop ke-i berjarak (i * spacing) studs dari player di trail
-                local targetPos = trailAt(i * spacing, spacing, rootPos)
-                targetPos = targetPos + Vector3.new(0, heightOffset, 0)
-
-                -- pertahankan rotasi asli
-                local okRot, origCF = pcall(function() return obj:GetPivot() end)
-                local goalCF = CFrame.new(targetPos)
-                if okRot then
-                    goalCF = CFrame.new(targetPos) * origCF.Rotation
-                end
-
-                local ok = pcall(function() remote:InvokeServer(goalCF) end)
-                if ok then okCount += 1 else errCount += 1 end
-            else
-                errCount += 1
-            end
-        end
+        -- posisi monster di belakang player
+        local back = root.CFrame.LookVector * -distance
+        local centerPos = root.Position + back
+        local centerCF = CFrame.new(centerPos, centerPos + root.CFrame.LookVector)
+        local okCount, errCount = updateMonster(centerCF, scale, heightOffset)
 
         if os.clock() - lastStatusTime > 0.5 then
-            setStatus(string.format("Snake ON | OK: %d | Error: %d | Trail: %d",
-                okCount, errCount, #trail))
+            setStatus(string.format("Monster ON | OK: %d | Err: %d", okCount, errCount))
             lastStatusTime = os.clock()
         end
     end))
 end
 
-listen(toggleBtn.MouseButton1Click:Connect(function()
-    if followRunning then stopFollow() else startFollow() end
+local function startAttack()
+    if attackRunning then return end
+    if #myProps == 0 then setStatus("Scan prop dulu.") return end
+    if #assignedSlots == 0 then assignSlots() end
+
+    local target = nil
+    -- target = pemain terdekat selain diri sendiri
+    local myChar = localPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myPos = myRoot and myRoot.Position or Vector3.zero
+    local bestDist = math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= localPlayer and p.Character then
+            local r = p.Character:FindFirstChild("HumanoidRootPart")
+            local h = p.Character:FindFirstChildOfClass("Humanoid")
+            if r and h and h.Health > 0 then
+                local d = (r.Position - myPos).Magnitude
+                if d < bestDist then bestDist = d; target = p end
+            end
+        end
+    end
+    if not target then setStatus("Tidak ada target lain di server.") return end
+
+    local scale = math.clamp(tonumber(scaleBox.Text) or 3, 0.5, 20)
+    local distance = math.clamp(tonumber(distBox.Text) or 8, 2, 60)
+    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -10, 40)
+
+    followRunning = false
+    followBtn.Text = "FOLLOW SAYA: OFF"
+    followBtn.BackgroundColor3 = COLORS.green
+    attackRunning = true
+    followToken += 1
+    local myToken = followToken
+    attackBtn.Text = "KEJAR TARGET: ON"
+    attackBtn.BackgroundColor3 = COLORS.red
+    setStatus("Monster mengejar @" .. target.Name)
+
+    local lastStatusTime = 0
+    listen(RunService.Heartbeat:Connect(function()
+        if not attackRunning or followToken ~= myToken then return end
+        if not gui.Parent then stopAll() return end
+        if target.Parent ~= Players then stopAll(); setStatus("Target keluar.") return end
+
+        local tChar = target.Character
+        local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+        local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+        if not tRoot or not tHum or tHum.Health <= 0 then
+            if os.clock() - lastStatusTime > 1 then
+                setStatus("Menunggu target...")
+                lastStatusTime = os.clock()
+            end
+            return
+        end
+
+        -- monster berdiri di belakang target
+        local back = tRoot.CFrame.LookVector * -distance
+        local centerPos = tRoot.Position + back
+        local centerCF = CFrame.new(centerPos, tRoot.Position)
+        local okCount, errCount = updateMonster(centerCF, scale, heightOffset)
+
+        if os.clock() - lastStatusTime > 0.5 then
+            setStatus(string.format("Kejar @%s | OK: %d | Err: %d",
+                target.Name, okCount, errCount))
+            lastStatusTime = os.clock()
+        end
+    end))
+end
+
+listen(followBtn.MouseButton1Click:Connect(function()
+    if followRunning then stopAll() else startFollow() end
+end))
+listen(attackBtn.MouseButton1Click:Connect(function()
+    if attackRunning then stopAll() else startAttack() end
+end))
+
+-- Assign slot otomatis setiap kali scan
+listen(scanBtn.MouseButton1Click:Connect(function()
+    task.defer(assignSlots)
 end))
 
 --====================================================
@@ -379,9 +501,7 @@ listen(header.InputBegan:Connect(function(input)
         dragStart = input.Position
         startPos = main.Position
         input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
         end)
     end
 end))
@@ -401,6 +521,7 @@ listen(closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end))
 
 gui.Destroying:Connect(function()
     followRunning = false
+    attackRunning = false
     followToken += 1
     for _, c in ipairs(propConnections) do pcall(function() c:Disconnect() end) end
     for _, c in ipairs(connections) do
@@ -410,4 +531,4 @@ gui.Destroying:Connect(function()
 end)
 
 setStatus("Siap | Tekan SCAN SEMUA PROP SAYA")
-print("[XLORD Prop Snake] Loaded")
+print("[XLORD Giant Monster] Loaded")
