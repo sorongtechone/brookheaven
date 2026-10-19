@@ -1,50 +1,79 @@
-
+--====================================================
+-- XLORD HUB V1 | BROOKHAVEN RP sekali
+-- Teleport, One-Click Auto Couch TP + HP Recovery Baru, XYZ, Resize, Minimize
+-- Scroll fix: no UIScale; explicit content height
+-- V23: + TARIK PLAYER (pull target) + LIHAT PLAYER (spectate toggle)
+--       + footer compact 2-column layout
+--====================================================
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+--====================================================
+-- ANTI SIT
+--====================================================
 local antiSitEnabled = false
 local antiSitHumanoidConnection = nil
 local antiSitCharacterConnection = nil
 
 local function monitorAntiSitCharacter(character)
-    if not antiSitEnabled or not character then return end
+    if not antiSitEnabled or not character then
+        return
+    end
+
     if antiSitHumanoidConnection then
-        pcall(function() antiSitHumanoidConnection:Disconnect() end)
+        antiSitHumanoidConnection:Disconnect()
         antiSitHumanoidConnection = nil
     end
+
     local humanoid = character:FindFirstChildOfClass("Humanoid")
         or character:WaitForChild("Humanoid", 5)
-    if not humanoid or not antiSitEnabled then return end
+
+    if not humanoid or not antiSitEnabled then
+        return
+    end
+
     antiSitHumanoidConnection =
         humanoid:GetPropertyChangedSignal("Sit"):Connect(function()
-            if antiSitEnabled and humanoid.Parent and humanoid.Sit then
+            if antiSitEnabled
+                and humanoid.Parent
+                and humanoid.Sit then
                 humanoid.Sit = false
             end
         end)
-    if humanoid.Sit then humanoid.Sit = false end
+
+    if humanoid.Sit then
+        humanoid.Sit = false
+    end
 end
 
 local function setAntiSit(enabled)
     antiSitEnabled = enabled
+
     if not enabled then
         if antiSitHumanoidConnection then
-            pcall(function() antiSitHumanoidConnection:Disconnect() end)
+            antiSitHumanoidConnection:Disconnect()
             antiSitHumanoidConnection = nil
         end
+
         if antiSitCharacterConnection then
-            pcall(function() antiSitCharacterConnection:Disconnect() end)
+            antiSitCharacterConnection:Disconnect()
             antiSitCharacterConnection = nil
         end
+
         return
     end
+
     monitorAntiSitCharacter(Players.LocalPlayer.Character)
+
     if not antiSitCharacterConnection then
         antiSitCharacterConnection =
             Players.LocalPlayer.CharacterAdded:Connect(function(character)
-                task.defer(function() monitorAntiSitCharacter(character) end)
+                task.defer(function()
+                    monitorAntiSitCharacter(character)
+                end)
             end)
     end
 end
@@ -52,17 +81,9 @@ end
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
--- Bersihkan GUI XLORD lama dengan aman (pakai pcall & string.find)
-for _, child in ipairs(playerGui:GetChildren()) do
-    pcall(function()
-        if child:IsA("ScreenGui") then
-            local n = string.lower(child.Name or "")
-            if string.find(n, "xlord", 1, true) then
-                child:Destroy()
-            end
-        end
-    end)
-end
+-- Remove old version before creating a new one.
+local previous = playerGui:FindFirstChild("XLORD_Teleport")
+if previous then previous:Destroy() end
 
 local connections = {}
 local function listen(connection)
@@ -129,7 +150,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V25"
+header.Text = "XLORD | V23"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -145,7 +166,8 @@ local close = button(main, "Close", "X", COLORS.red)
 local propModeButton = button(main, "PropMode", "PROP", COLORS.purple)
 local xyzButton = button(main, "XYZToggle", "XYZ", COLORS.blue)
 local antiSitButton = button(main, "AntiSitToggle", "AS", COLORS.green)
-antiSitButton.Visible = false
+antiSitButton.Visible = false -- Diaktifkan setelah posisi header diatur
+
 
 local floating = button(gui, "FloatingXL", "XL", COLORS.blue)
 floating.Size = UDim2.fromOffset(44, 44)
@@ -173,6 +195,7 @@ round(search, 7)
 
 local refresh = button(main, "Refresh", "REFRESH PLAYERS", COLORS.blue)
 
+-- The player list deliberately has no UIScale in any ancestor.
 local scroll = Instance.new("ScrollingFrame")
 scroll.Name = "PlayerList"
 scroll.BackgroundColor3 = COLORS.list
@@ -211,16 +234,25 @@ targetLabel.TextTruncate = Enum.TextTruncate.AtEnd
 targetLabel.TextXAlignment = Enum.TextXAlignment.Left
 targetLabel.Parent = main
 
+--====================================================
+-- FOOTER COMPACT (2 KOLOM)
+--====================================================
 local teleport = button(main, "Teleport", "TELEPORT", COLORS.green)
 local fling = button(main, "SofaFling", "AUTO SOFA : START", COLORS.orange)
-local copyAvatarButton = button(main, "CopyAvatar", "COPIAR AVATAR", Color3.fromRGB(80, 130, 210))
+
+-- FITUR BARU: TARIK PLAYER (pull target)
+local pullButton = button(main, "PullTarget", "TARIK", COLORS.purple)
+
+-- FITUR BARU: LIHAT PLAYER (toggle spectate)
 local lookButton = button(main, "LookTarget", "LIHAT: OFF", COLORS.gray)
+
+-- TRAMPOLINE tetap satu baris penuh, sedikit lebih tipis
 local trampolineButton = button(main, "Trampoline", "TRAMPOLINE (TEST)", Color3.fromRGB(191, 45, 54))
 
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V25 siap digunakan"
+status.Text = "XLORD V23 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -228,9 +260,12 @@ status.TextWrapped = true
 status.Parent = main
 
 local function setStatus(message)
-    if gui.Parent then status.Text = tostring(message) end
+    if gui.Parent then status.Text = message end
 end
 
+--====================================================
+-- RESIZE: change real pixel dimensions, NOT UIScale.
+--====================================================
 local width, height = 320, 490
 local MIN_WIDTH, MIN_HEIGHT = 320, 365
 local MAX_WIDTH, MAX_HEIGHT = 420, 640
@@ -247,17 +282,24 @@ local function updateCanvas(resetPosition)
     if not gui.Parent then return end
     canvasRevision = canvasRevision + 1
     local revision = canvasRevision
+
+    -- Exact height in unscaled pixels (including both paddings).
     local rowsHeight = listCount * ROW_HEIGHT
     local gapsHeight = math.max(0, listCount - 1) * ROW_GAP
     local canvasHeight = rowsHeight + gapsHeight + LIST_PADDING * 2 + 28
     scroll.CanvasSize = UDim2.fromOffset(0, canvasHeight)
+
     if resetPosition then scroll.CanvasPosition = Vector2.zero end
+
+    -- Reapply after layout/render to avoid stale scroll bounds.
     task.spawn(function()
         RunService.Heartbeat:Wait()
         if not gui.Parent or revision ~= canvasRevision then return end
         scroll.CanvasSize = UDim2.fromOffset(0, canvasHeight)
         local maxY = math.max(0, canvasHeight - scroll.AbsoluteWindowSize.Y)
-        scroll.CanvasPosition = Vector2.new(0, math.clamp(scroll.CanvasPosition.Y, 0, maxY))
+        scroll.CanvasPosition = Vector2.new(
+            0, math.clamp(scroll.CanvasPosition.Y, 0, maxY)
+        )
     end)
 end
 
@@ -279,6 +321,486 @@ local function ensureOnScreen(object)
     end
 end
 
+
+local function applySize(newWidth, newHeight)
+    local view = viewportSize()
+
+    local maximumWidth = math.min(MAX_WIDTH, math.max(180, view.X - 16))
+    local maximumHeight = math.min(MAX_HEIGHT, math.max(300, view.Y - 16))
+
+    width = math.clamp(newWidth, math.min(MIN_WIDTH, maximumWidth), maximumWidth)
+    height = math.clamp(newHeight, math.min(MIN_HEIGHT, maximumHeight), maximumHeight)
+
+    main.Size = UDim2.fromOffset(width, height)
+
+    -- Header
+    header.Position = UDim2.fromOffset(12, 0)
+    header.Size = UDim2.fromOffset(math.max(65, width - 310), 42)
+    header.Text = width < 320 and "XLORD" or "XLORD | V23"
+
+    -- Ukuran tombol header
+    local sizeBtn = 30
+
+    smaller.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    larger.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    minimize.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    close.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+
+    propModeButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    xyzButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+    antiSitButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
+
+    -- Posisi tombol dari kanan ke kiri
+    close.Position = UDim2.fromOffset(width - 42, 6)
+    minimize.Position = UDim2.fromOffset(width - 76, 6)
+    larger.Position = UDim2.fromOffset(width - 110, 6)
+    smaller.Position = UDim2.fromOffset(width - 144, 6)
+
+    antiSitButton.Position = UDim2.fromOffset(width - 178, 6)
+    xyzButton.Position = UDim2.fromOffset(width - 212, 6)
+    propModeButton.Position = UDim2.fromOffset(width - 246, 6)
+
+    antiSitButton.Visible = true
+
+    -- Pencarian pemain
+    search.Position = UDim2.fromOffset(10, 47)
+    search.Size = UDim2.fromOffset(width - 20, 35)
+
+    refresh.Position = UDim2.fromOffset(10, 88)
+    refresh.Size = UDim2.fromOffset(width - 20, 31)
+
+    -- Daftar pemain (footer lebih ringkas = daftar lebih tinggi)
+    -- total footer = target(22) + TELEPORT/AUTO SOFA(34) + TARIK/LIHAT(32) + TRAMPOLINE(28) + status(28) + gaps
+    local listHeight = math.max(60, height - 320)
+
+    scroll.Position = UDim2.fromOffset(10, 125)
+    scroll.Size = UDim2.fromOffset(width - 20, listHeight)
+
+    -- Target & tombol aksi (compact)
+    local targetY = 125 + listHeight + 6
+
+    targetLabel.Position = UDim2.fromOffset(12, targetY)
+    targetLabel.Size = UDim2.fromOffset(width - 24, 22)
+
+    -- Baris 1: TELEPORT | AUTO SOFA (2 kolom)
+    local row1Y = targetY + 26
+    local halfW = (width - 20 - 6) / 2
+    teleport.Position = UDim2.fromOffset(10, row1Y)
+    teleport.Size = UDim2.fromOffset(halfW, 34)
+    fling.Position = UDim2.fromOffset(10 + halfW + 6, row1Y)
+    fling.Size = UDim2.fromOffset(halfW, 34)
+
+    -- Baris 2: TARIK | LIHAT (2 kolom, lebih tipis)
+    local row2Y = row1Y + 40
+    pullButton.Position = UDim2.fromOffset(10, row2Y)
+    pullButton.Size = UDim2.fromOffset(halfW, 32)
+    lookButton.Position = UDim2.fromOffset(10 + halfW + 6, row2Y)
+    lookButton.Size = UDim2.fromOffset(halfW, 32)
+
+    -- Baris 3: TRAMPOLINE full width, tipis
+    local row3Y = row2Y + 38
+    trampolineButton.Position = UDim2.fromOffset(10, row3Y)
+    trampolineButton.Size = UDim2.fromOffset(width - 20, 28)
+    trampolineButton.TextSize = 12
+
+    -- Baris 4: status
+    status.Position = UDim2.fromOffset(10, row3Y + 32)
+    status.Size = UDim2.fromOffset(width - 20, 28)
+
+    updateCanvas(false)
+    task.defer(function()
+        if gui.Parent and main.Visible then ensureOnScreen(main) end
+    end)
+end
+
+applySize(width, height)
+
+listen(antiSitButton.MouseButton1Click:Connect(function()
+    setAntiSit(not antiSitEnabled)
+
+    if antiSitEnabled then
+        antiSitButton.Text = "AS"
+        antiSitButton.BackgroundColor3 = COLORS.green
+        setStatus("Anti Sit ON")
+    else
+        antiSitButton.Text = "AS"
+        antiSitButton.BackgroundColor3 = COLORS.orange
+        setStatus("Anti Sit OFF")
+    end
+end))
+
+listen(smaller.MouseButton1Click:Connect(function()
+    applySize(width - 20, height - 30)
+end))
+listen(larger.MouseButton1Click:Connect(function()
+    applySize(width + 20, height + 30)
+end))
+
+local cameraConnection
+local function watchCamera()
+    if cameraConnection then cameraConnection:Disconnect() end
+    local camera = workspace.CurrentCamera
+    if camera then
+        cameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+            if gui.Parent then applySize(width, height) end
+        end)
+    end
+    applySize(width, height)
+end
+listen(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera))
+watchCamera()
+
+--====================================================
+-- TELEPORT AND SOFA FLING
+--====================================================
+local selectedPlayer
+local propTarget = nil
+
+--====================================================
+-- V21: GENUINE BROOKHAVEN TRAMPOLINE TOOL EXPERIMENT
+--====================================================
+local trampolinePreview = nil
+local trampolineBusy = false
+
+local function isGenuineTrampoline(obj)
+    if not obj or not obj:IsA("Tool") then return false end
+    local n = obj.Name:lower():gsub("[%s_%-]", "")
+    return n:find("trampoline", 1, true) ~= nil
+        or n:find("trampolin", 1, true) ~= nil
+end
+
+local function findTrampoline(char, backpack)
+    for _, container in ipairs({char, backpack}) do
+        if container then
+            for _, obj in ipairs(container:GetChildren()) do
+                if isGenuineTrampoline(obj) then return obj end
+            end
+        end
+    end
+    return nil
+end
+
+local function fetchTrampoline(char, backpack)
+    local tool = findTrampoline(char, backpack)
+    if tool then return tool end
+    local re = ReplicatedStorage:FindFirstChild("RE")
+    local pickup = re and re:FindFirstChild("1Too1l")
+    if not pickup or not pickup:IsA("RemoteFunction") then
+        return nil, "Remote pengambilan item tidak tersedia"
+    end
+    setStatus("Mengambil trampoline merah asli...")
+    local ok, err = pcall(function()
+        pickup:InvokeServer("PickingTools", "Trampoline")
+    end)
+    if not ok then
+        return nil, "Pickup ditolak: " .. tostring(err)
+    end
+    for _ = 1, 25 do
+        if not gui.Parent or localPlayer.Character ~= char then break end
+        tool = findTrampoline(char, backpack)
+        if tool then return tool end
+        task.wait(0.1)
+    end
+    return nil, "Item trampoline asli belum masuk Backpack"
+end
+
+local function useGenuineTrampolineNearTarget()
+    if trampolineBusy then
+        setStatus("Proses trampoline masih berjalan")
+        return
+    end
+    local target = selectedPlayer
+    if not target or target.Parent ~= Players then
+        setStatus("Pilih target terlebih dahulu")
+        return
+    end
+    local targetChar = target.Character
+    local tRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+    if not tRoot or not targetHum or targetHum.Health <= 0 then
+        setStatus("Target tidak siap")
+        return
+    end
+
+    trampolineBusy = true
+    task.spawn(function()
+        local char = localPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local backpack = localPlayer:FindFirstChildOfClass("Backpack")
+        if not char or not hum or hum.Health <= 0 or not root or not backpack then
+            setStatus("Karakter sendiri belum siap")
+            trampolineBusy = false
+            return
+        end
+
+        local tool, message = fetchTrampoline(char, backpack)
+        if not tool then
+            setStatus(message or "Trampoline asli tidak ditemukan")
+            trampolineBusy = false
+            return
+        end
+
+        local home = char:GetPivot()
+        local activated = false
+        local activatedConn = tool.Activated:Connect(function()
+            activated = true
+        end)
+        local ok, err = pcall(function()
+            hum.Sit = false
+            hum:EquipTool(tool)
+            task.wait(0.1)
+            if tool.Parent ~= char then
+                error("Trampoline gagal dipasang ke tangan")
+            end
+            local fresh = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+            if not fresh then error("Target sudah berpindah/hilang") end
+            local facing = fresh.CFrame.LookVector
+            local nearPos = fresh.Position - facing * 3.0
+            local placeFrom = Vector3.new(nearPos.X, fresh.Position.Y, nearPos.Z)
+            char:PivotTo(CFrame.lookAt(placeFrom, fresh.Position))
+            RunService.Heartbeat:Wait()
+            if char.Parent and tool.Parent == char then
+                tool:Activate()
+                task.wait(0.18)
+                tool:Deactivate()
+            end
+        end)
+        pcall(function()
+            if char.Parent and localPlayer.Character == char then
+                hum:UnequipTools()
+                char:PivotTo(home)
+                local r = char:FindFirstChild("HumanoidRootPart")
+                if r then
+                    r.AssemblyLinearVelocity = Vector3.zero
+                    r.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
+        end)
+        activatedConn:Disconnect()
+        if not gui.Parent then
+            trampolineBusy = false
+            return
+        end
+        if not ok then
+            setStatus("Trampoline gagal: " .. tostring(err):sub(1, 80))
+        elseif activated then
+            setStatus("Item asli diaktifkan dekat @" .. target.Name .. "; cek hasil server")
+        else
+            setStatus("Item dipegang, tetapi aktivasi tidak terdeteksi")
+        end
+        print("[XLORD V23] Tool asli:", tool.Name,
+            "Aktivasi:", activated, "OK:", ok,
+            "Target:", target.Name, "Error:", err)
+        trampolineBusy = false
+    end)
+end
+
+listen(trampolineButton.MouseButton1Click:Connect(useGenuineTrampolineNearTarget))
+
+--====================================================
+-- FITUR BARU: TARIK PLAYER (PULL TARGET)
+-- Menarik HumanoidRootPart target ke posisi kita dengan BodyMover
+-- client-side selama beberapa detik. Tidak mengklaim pull server-side.
+-- Klik lagi saat aktif untuk STOP.
+--====================================================
+local pullRunning = false
+local pullToken = 0
+local pullConnection = nil
+local pullTarget = nil
+
+local function stopPull(message)
+    pullToken = pullToken + 1
+    pullRunning = false
+    if pullConnection then
+        pcall(function() pullConnection:Disconnect() end)
+        pullConnection = nil
+    end
+    if pullTarget and pullTarget.Character then
+        local tRoot = pullTarget.Character:FindFirstChild("HumanoidRootPart")
+        if tRoot then
+            for _, child in ipairs(tRoot:GetChildren()) do
+                if child:IsA("BodyPosition") and child.Name == "XLORD_PullPos" then
+                    pcall(function() child:Destroy() end)
+                elseif child:IsA("BodyVelocity") and child.Name == "XLORD_PullVel" then
+                    pcall(function() child:Destroy() end)
+                elseif child:IsA("BodyGyro") and child.Name == "XLORD_PullGyro" then
+                    pcall(function() child:Destroy() end)
+                end
+            end
+        end
+    end
+    pullTarget = nil
+    pullButton.Text = "TARIK"
+    pullButton.BackgroundColor3 = COLORS.purple
+    if message then setStatus(message) end
+end
+
+local function startPull()
+    if pullRunning then
+        stopPull("Tarik player dihentikan")
+        return
+    end
+    local target = selectedPlayer
+    if not target or target.Parent ~= Players then
+        setStatus("Pilih target terlebih dahulu")
+        return
+    end
+    local myChar = localPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    if not myRoot or not myHum or myHum.Health <= 0 then
+        setStatus("Karakter kamu belum siap")
+        return
+    end
+    local tChar = target.Character
+    local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+    local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+    if not tRoot or not tHum or tHum.Health <= 0 then
+        setStatus("Target tidak siap")
+        return
+    end
+
+    pullRunning = true
+    pullToken = pullToken + 1
+    local myToken = pullToken
+    pullTarget = target
+    pullButton.Text = "STOP TARIK"
+    pullButton.BackgroundColor3 = COLORS.red
+    setStatus("Menarik @" .. target.Name .. "...")
+
+    local bpos = Instance.new("BodyPosition")
+    bpos.Name = "XLORD_PullPos"
+    bpos.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+    bpos.P = 25000
+    bpos.D = 900
+    bpos.Position = tRoot.Position
+    bpos.Parent = tRoot
+
+    local bvel = Instance.new("BodyVelocity")
+    bvel.Name = "XLORD_PullVel"
+    bvel.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    bvel.P = 12500
+    bvel.Velocity = Vector3.zero
+    bvel.Parent = tRoot
+
+    -- Loop follow kita selama ~1.5 detik atau sampai target duduk
+    local started = os.clock()
+    local MAX_PULL = 1.5
+    local DIST_STOP = 3.0
+
+    pullConnection = RunService.Heartbeat:Connect(function()
+        if pullToken ~= myToken or not pullRunning then return end
+        if gui.Parent == nil then stopPull(nil); return end
+        if localPlayer.Character ~= myChar then stopPull("Karakter berubah"); return end
+        if not tRoot.Parent or target.Parent ~= Players then stopPull("Target hilang"); return end
+        if tHum.Health <= 0 then stopPull("Target mati"); return end
+
+        local myRootNow = myChar:FindFirstChild("HumanoidRootPart")
+        if not myRootNow then stopPull("Karakter kamu hilang"); return end
+
+        -- Hentikan kalau target sudah duduk (biar tidak rebutan seat)
+        if tHum.Sit then
+            stopPull("Target duduk: tarik selesai")
+            return
+        end
+
+        local dist = (myRootNow.Position - tRoot.Position).Magnitude
+        if dist <= DIST_STOP or os.clock() - started >= MAX_PULL then
+            stopPull("Tarik selesai (" .. string.format("%.1f", dist) .. " studs)")
+            return
+        end
+
+        -- Arahkan ke depan kita (biar tidak menumpuk di badan)
+        local goal = myRootNow.Position + myRootNow.CFrame.LookVector * 2.5
+        bpos.Position = goal
+        bvel.Velocity = (goal - tRoot.Position).Unit * 45
+    end)
+end
+
+listen(pullButton.MouseButton1Click:Connect(startPull))
+
+--====================================================
+-- FITUR BARU: LIHAT PLAYER (SPECTATE TOGGLE)
+-- ON  -> kamera mengikuti Humanoid target
+-- OFF -> kamera kembali ke humanoid sendiri
+-- Otomatis OFF saat target keluar atau kita respawn.
+--====================================================
+local lookEnabled = false
+local lookToken = 0
+local lookConnection = nil
+
+local function stopLook(message)
+    lookToken = lookToken + 1
+    lookEnabled = false
+    if lookConnection then
+        pcall(function() lookConnection:Disconnect() end)
+        lookConnection = nil
+    end
+    local myChar = localPlayer.Character
+    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    if myHum and workspace.CurrentCamera then
+        workspace.CurrentCamera.CameraSubject = myHum
+    end
+    lookButton.Text = "LIHAT: OFF"
+    lookButton.BackgroundColor3 = COLORS.gray
+    if message then setStatus(message) end
+end
+
+local function startLook()
+    local target = selectedPlayer
+    if not target or target.Parent ~= Players then
+        setStatus("Pilih target terlebih dahulu")
+        return
+    end
+    local tChar = target.Character
+    local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+    if not tHum then
+        setStatus("Target belum siap")
+        return
+    end
+
+    lookEnabled = true
+    lookToken = lookToken + 1
+    local myToken = lookToken
+    lookButton.Text = "LIHAT: ON"
+    lookButton.BackgroundColor3 = COLORS.green
+    setStatus("Melihat @" .. target.Name)
+
+    local camera = workspace.CurrentCamera
+    camera.CameraSubject = tHum
+
+    -- Jaga-jaga kalau target respawn / ganti humanoid
+    lookConnection = RunService.Heartbeat:Connect(function()
+        if lookToken ~= myToken or not lookEnabled then return end
+        if gui.Parent == nil then stopLook(nil); return end
+        if selectedPlayer ~= target then stopLook("Target diganti"); return end
+        if target.Parent ~= Players then stopLook("Target keluar server"); return end
+        local c = target.Character
+        local h = c and c:FindFirstChildOfClass("Humanoid")
+        if not h then return end
+        if workspace.CurrentCamera.CameraSubject ~= h then
+            workspace.CurrentCamera.CameraSubject = h
+        end
+    end)
+end
+
+listen(lookButton.MouseButton1Click:Connect(function()
+    if lookEnabled then
+        stopLook("Lihat player OFF")
+    else
+        startLook()
+    end
+end))
+
+-- Auto-stop look saat kita respawn
+listen(localPlayer.CharacterAdded:Connect(function()
+    if lookEnabled then stopLook("Kamu respawn: lihat OFF") end
+end))
+
+--====================================================
+-- LIVE MAP POSITION HUD (own character + selected target)
+--====================================================
 local coordHUD = Instance.new("Frame")
 coordHUD.Name = "XLORD_Coordinates"
 coordHUD.AnchorPoint = Vector2.new(0.5, 0)
@@ -288,7 +810,6 @@ coordHUD.BackgroundColor3 = Color3.fromRGB(22, 25, 36)
 coordHUD.BackgroundTransparency = 0.12
 coordHUD.BorderSizePixel = 0
 coordHUD.ZIndex = 110
-coordHUD.Visible = true
 coordHUD.Parent = gui
 round(coordHUD, 9)
 
@@ -331,6 +852,23 @@ coordHide.Position = UDim2.new(1, -34, 0, 15)
 coordHide.TextSize = 16
 coordHide.ZIndex = 111
 
+local coordMini = button(gui, "ExpandXYZ", "XYZ", COLORS.blue)
+coordMini.AnchorPoint = Vector2.new(0.5, 0)
+coordMini.Position = UDim2.new(0.5, 0, 0, 10)
+coordMini.Size = UDim2.fromOffset(70, 30)
+coordMini.ZIndex = 110
+coordMini.Visible = false
+coordMini.Parent = gui
+
+listen(coordHide.MouseButton1Click:Connect(function()
+    coordHUD.Visible = false
+    coordMini.Visible = true
+end))
+listen(coordMini.MouseButton1Click:Connect(function()
+    coordMini.Visible = false
+    coordHUD.Visible = true
+end))
+
 local function xyz(position)
     return string.format("X: %.1f   Y: %.1f   Z: %.1f",
         position.X, position.Y, position.Z)
@@ -342,6 +880,7 @@ task.spawn(function()
         local root = character and character:FindFirstChild("HumanoidRootPart")
         coordSelf.Text = root and ("KAMU   " .. xyz(root.Position))
             or "KAMU   Menunggu karakter..."
+
         if selectedPlayer and selectedPlayer.Parent == Players then
             local targetCharacter = selectedPlayer.Character
             local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
@@ -355,405 +894,9 @@ task.spawn(function()
     end
 end)
 
-local xyzHUDVisible = true
-local function applyXYZButton()
-    xyzButton.BackgroundColor3 = xyzHUDVisible and COLORS.blue or COLORS.gray
-end
-applyXYZButton()
-
-local function applySize(newWidth, newHeight)
-    local view = viewportSize()
-    local maximumWidth = math.min(MAX_WIDTH, math.max(180, view.X - 16))
-    local maximumHeight = math.min(MAX_HEIGHT, math.max(300, view.Y - 16))
-    width = math.clamp(newWidth, math.min(MIN_WIDTH, maximumWidth), maximumWidth)
-    height = math.clamp(newHeight, math.min(MIN_HEIGHT, maximumHeight), maximumHeight)
-    main.Size = UDim2.fromOffset(width, height)
-
-    header.Position = UDim2.fromOffset(12, 0)
-    header.Size = UDim2.fromOffset(math.max(65, width - 300), 42)
-    header.Text = width < 320 and "XLORD" or "XLORD | V25"
-
-    local sizeBtn = 30
-    smaller.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
-    larger.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
-    minimize.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
-    close.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
-    propModeButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
-    xyzButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
-    antiSitButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
-
-    close.Position = UDim2.fromOffset(width - 42, 6)
-    minimize.Position = UDim2.fromOffset(width - 76, 6)
-    larger.Position = UDim2.fromOffset(width - 110, 6)
-    smaller.Position = UDim2.fromOffset(width - 144, 6)
-    antiSitButton.Position = UDim2.fromOffset(width - 178, 6)
-    xyzButton.Position = UDim2.fromOffset(width - 212, 6)
-    propModeButton.Position = UDim2.fromOffset(width - 246, 6)
-
-    antiSitButton.Visible = true
-
-    search.Position = UDim2.fromOffset(10, 47)
-    search.Size = UDim2.fromOffset(width - 20, 35)
-    refresh.Position = UDim2.fromOffset(10, 88)
-    refresh.Size = UDim2.fromOffset(width - 20, 31)
-
-    local listHeight = math.max(60, height - 320)
-    scroll.Position = UDim2.fromOffset(10, 125)
-    scroll.Size = UDim2.fromOffset(width - 20, listHeight)
-
-    local targetY = 125 + listHeight + 6
-    targetLabel.Position = UDim2.fromOffset(12, targetY)
-    targetLabel.Size = UDim2.fromOffset(width - 24, 22)
-
-    local row1Y = targetY + 26
-    local halfW = (width - 20 - 6) / 2
-    teleport.Position = UDim2.fromOffset(10, row1Y)
-    teleport.Size = UDim2.fromOffset(halfW, 34)
-    fling.Position = UDim2.fromOffset(10 + halfW + 6, row1Y)
-    fling.Size = UDim2.fromOffset(halfW, 34)
-
-    local row2Y = row1Y + 40
-    copyAvatarButton.Position = UDim2.fromOffset(10, row2Y)
-    copyAvatarButton.Size = UDim2.fromOffset(halfW, 32)
-    copyAvatarButton.TextSize = 12
-    lookButton.Position = UDim2.fromOffset(10 + halfW + 6, row2Y)
-    lookButton.Size = UDim2.fromOffset(halfW, 32)
-
-    local row3Y = row2Y + 38
-    trampolineButton.Position = UDim2.fromOffset(10, row3Y)
-    trampolineButton.Size = UDim2.fromOffset(width - 20, 28)
-    trampolineButton.TextSize = 12
-
-    status.Position = UDim2.fromOffset(10, row3Y + 32)
-    status.Size = UDim2.fromOffset(width - 20, 28)
-
-    updateCanvas(false)
-    task.defer(function()
-        if gui.Parent and main.Visible then ensureOnScreen(main) end
-    end)
-end
-
-applySize(width, height)
-
-listen(antiSitButton.MouseButton1Click:Connect(function()
-    setAntiSit(not antiSitEnabled)
-    if antiSitEnabled then
-        antiSitButton.Text = "AS"
-        antiSitButton.BackgroundColor3 = COLORS.green
-        setStatus("Anti Sit ON")
-    else
-        antiSitButton.Text = "AS"
-        antiSitButton.BackgroundColor3 = COLORS.orange
-        setStatus("Anti Sit OFF")
-    end
-end))
-
-listen(xyzButton.MouseButton1Click:Connect(function()
-    xyzHUDVisible = not xyzHUDVisible
-    coordHUD.Visible = xyzHUDVisible
-    applyXYZButton()
-    setStatus(xyzHUDVisible and "HUD koordinat ON" or "HUD koordinat OFF")
-end))
-
-listen(coordHide.MouseButton1Click:Connect(function()
-    coordHUD.Visible = false
-    xyzHUDVisible = false
-    applyXYZButton()
-end))
-
-listen(smaller.MouseButton1Click:Connect(function()
-    applySize(width - 20, height - 30)
-end))
-listen(larger.MouseButton1Click:Connect(function()
-    applySize(width + 20, height + 30)
-end))
-
-local cameraConnection
-local function watchCamera()
-    if cameraConnection then pcall(function() cameraConnection:Disconnect() end) end
-    local camera = workspace.CurrentCamera
-    if camera then
-        cameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-            if gui.Parent then applySize(width, height) end
-        end)
-    end
-    applySize(width, height)
-end
-listen(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera))
-watchCamera()
-
-local selectedPlayer
-local propTarget = nil
-
-local trampolinePreview = nil
-local trampolineBusy = false
-
-local function isGenuineTrampoline(obj)
-    if not obj or not obj:IsA("Tool") then return false end
-    local n = string.lower(obj.Name or ""):gsub("[%s_%-]", "")
-    return string.find(n, "trampoline", 1, true) ~= nil
-        or string.find(n, "trampolin", 1, true) ~= nil
-end
-
-local function findTrampoline(char, backpack)
-    for _, container in ipairs({char, backpack}) do
-        if container then
-            for _, obj in ipairs(container:GetChildren()) do
-                if isGenuineTrampoline(obj) then return obj end
-            end
-        end
-    end
-    return nil
-end
-
-local function fetchTrampoline(char, backpack)
-    local tool = findTrampoline(char, backpack)
-    if tool then return tool end
-    local re = ReplicatedStorage:FindFirstChild("RE")
-    local pickup = re and re:FindFirstChild("1Too1l")
-    if not pickup or not pickup:IsA("RemoteFunction") then
-        return nil, "Remote pengambilan item tidak tersedia"
-    end
-    setStatus("Mengambil trampoline merah asli...")
-    local ok, err = pcall(function()
-        pickup:InvokeServer("PickingTools", "Trampoline")
-    end)
-    if not ok then
-        return nil, "Pickup ditolak: " .. tostring(err)
-    end
-    for _ = 1, 25 do
-        if not gui.Parent or localPlayer.Character ~= char then break end
-        tool = findTrampoline(char, backpack)
-        if tool then return tool end
-        task.wait(0.1)
-    end
-    return nil, "Item trampoline asli belum masuk Backpack"
-end
-
-local function useGenuineTrampolineNearTarget()
-    if trampolineBusy then setStatus("Proses trampoline masih berjalan") return end
-    local target = selectedPlayer
-    if not target or target.Parent ~= Players then setStatus("Pilih target terlebih dahulu") return end
-    local targetChar = target.Character
-    local tRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-    local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
-    if not tRoot or not targetHum or targetHum.Health <= 0 then setStatus("Target tidak siap") return end
-    trampolineBusy = true
-    task.spawn(function()
-        local char = localPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        local backpack = localPlayer:FindFirstChildOfClass("Backpack")
-        if not char or not hum or hum.Health <= 0 or not root or not backpack then
-            setStatus("Karakter sendiri belum siap"); trampolineBusy = false; return
-        end
-        local tool, message = fetchTrampoline(char, backpack)
-        if not tool then
-            setStatus(message or "Trampoline asli tidak ditemukan"); trampolineBusy = false; return
-        end
-        local home = char:GetPivot()
-        local activated = false
-        local activatedConn = tool.Activated:Connect(function() activated = true end)
-        local ok, err = pcall(function()
-            hum.Sit = false
-            hum:EquipTool(tool)
-            task.wait(0.1)
-            if tool.Parent ~= char then error("Trampoline gagal dipasang ke tangan") end
-            local fresh = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-            if not fresh then error("Target sudah berpindah/hilang") end
-            local facing = fresh.CFrame.LookVector
-            local nearPos = fresh.Position - facing * 3.0
-            local placeFrom = Vector3.new(nearPos.X, fresh.Position.Y, nearPos.Z)
-            char:PivotTo(CFrame.lookAt(placeFrom, fresh.Position))
-            RunService.Heartbeat:Wait()
-            if char.Parent and tool.Parent == char then
-                tool:Activate(); task.wait(0.18); tool:Deactivate()
-            end
-        end)
-        pcall(function()
-            if char.Parent and localPlayer.Character == char then
-                hum:UnequipTools(); char:PivotTo(home)
-                local r = char:FindFirstChild("HumanoidRootPart")
-                if r then
-                    r.AssemblyLinearVelocity = Vector3.zero
-                    r.AssemblyAngularVelocity = Vector3.zero
-                end
-            end
-        end)
-        activatedConn:Disconnect()
-        if not gui.Parent then trampolineBusy = false return end
-        if not ok then setStatus("Trampoline gagal: " .. tostring(err):sub(1, 80))
-        elseif activated then setStatus("Item asli diaktifkan dekat @" .. target.Name .. "; cek hasil server")
-        else setStatus("Item dipegang, tetapi aktivasi tidak terdeteksi") end
-        trampolineBusy = false
-    end)
-end
-
-listen(trampolineButton.MouseButton1Click:Connect(useGenuineTrampolineNearTarget))
-
--- COPY AVATAR
-local copyBusy = false
-
-local function copyAvatarFrom(target)
-    if copyBusy then setStatus("Copy avatar masih berjalan") return end
-    if not target or target.Parent ~= Players then
-        setStatus("Pilih target terlebih dahulu")
-        return
-    end
-    if target == localPlayer then
-        setStatus("Target tidak boleh diri sendiri")
-        return
-    end
-    local lChar = localPlayer.Character
-    local tChar = target.Character
-    if not lChar or not tChar then
-        setStatus("Karakter belum siap")
-        return
-    end
-    local lHum = lChar:FindFirstChildOfClass("Humanoid")
-    local tHum = tChar:FindFirstChildOfClass("Humanoid")
-    if not lHum or not tHum then
-        setStatus("Humanoid tidak tersedia")
-        return
-    end
-
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    if not remotes then
-        setStatus("Folder 'Remotes' tidak ditemukan")
-        return
-    end
-    local wearRemote = remotes:FindFirstChild("Wear")
-    local changeBodyRemote = remotes:FindFirstChild("ChangeCharacterBody")
-    local changeColorRemote = remotes:FindFirstChild("ChangeBodyColor")
-    if not wearRemote or not changeBodyRemote then
-        setStatus("Remote Wear/ChangeCharacterBody tidak tersedia")
-        return
-    end
-
-    copyBusy = true
-    copyAvatarButton.Text = "COPIANDO..."
-    copyAvatarButton.BackgroundColor3 = COLORS.orange
-    setStatus("Menyalin avatar @" .. target.Name .. "...")
-
-    task.spawn(function()
-        local function safeInvoke(remote, ...)
-            if not remote then return end
-            pcall(function() remote:InvokeServer(...) end)
-        end
-
-        local lDesc = lHum:GetAppliedDescription()
-        for _, acc in ipairs(lDesc:GetAccessories(true)) do
-            if acc.AssetId and tonumber(acc.AssetId) then
-                safeInvoke(wearRemote, tonumber(acc.AssetId))
-                task.wait(0.15)
-            end
-        end
-        if tonumber(lDesc.Shirt) then safeInvoke(wearRemote, tonumber(lDesc.Shirt)); task.wait(0.15) end
-        if tonumber(lDesc.Pants) then safeInvoke(wearRemote, tonumber(lDesc.Pants)); task.wait(0.15) end
-        if tonumber(lDesc.Face) then safeInvoke(wearRemote, tonumber(lDesc.Face)); task.wait(0.15) end
-
-        local tDesc = tHum:GetAppliedDescription()
-
-        local argsBody = {
-            [1] = {
-                [1] = tDesc.Torso,
-                [2] = tDesc.RightArm,
-                [3] = tDesc.LeftArm,
-                [4] = tDesc.RightLeg,
-                [5] = tDesc.LeftLeg,
-                [6] = tDesc.Head
-            }
-        }
-        safeInvoke(changeBodyRemote, unpack(argsBody))
-        task.wait(0.4)
-
-        if tonumber(tDesc.Shirt) then safeInvoke(wearRemote, tonumber(tDesc.Shirt)); task.wait(0.25) end
-        if tonumber(tDesc.Pants) then safeInvoke(wearRemote, tonumber(tDesc.Pants)); task.wait(0.25) end
-        if tonumber(tDesc.Face) then safeInvoke(wearRemote, tonumber(tDesc.Face)); task.wait(0.25) end
-
-        for _, acc in ipairs(tDesc:GetAccessories(true)) do
-            if acc.AssetId and tonumber(acc.AssetId) then
-                safeInvoke(wearRemote, tonumber(acc.AssetId))
-                task.wait(0.25)
-            end
-        end
-
-        local skinColor = tChar:FindFirstChild("Body Colors")
-        if skinColor and changeColorRemote then
-            pcall(function() changeColorRemote:FireServer(tostring(skinColor.HeadColor)) end)
-            task.wait(0.25)
-        end
-
-        if tonumber(tDesc.IdleAnimation) then
-            safeInvoke(wearRemote, tonumber(tDesc.IdleAnimation))
-            task.wait(0.25)
-        end
-
-        copyBusy = false
-        copyAvatarButton.Text = "COPIAR AVATAR"
-        copyAvatarButton.BackgroundColor3 = Color3.fromRGB(80, 130, 210)
-        setStatus("Avatar @" .. target.Name .. " selesai disalin")
-    end)
-end
-
-listen(copyAvatarButton.MouseButton1Click:Connect(function()
-    copyAvatarFrom(selectedPlayer)
-end))
-
--- LIHAT PLAYER
-local lookEnabled = false
-local lookToken = 0
-local lookConnection = nil
-
-local function stopLook(message)
-    lookToken = lookToken + 1
-    lookEnabled = false
-    if lookConnection then pcall(function() lookConnection:Disconnect() end); lookConnection = nil end
-    local myChar = localPlayer.Character
-    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    if myHum and workspace.CurrentCamera then
-        workspace.CurrentCamera.CameraSubject = myHum
-    end
-    lookButton.Text = "LIHAT: OFF"
-    lookButton.BackgroundColor3 = COLORS.gray
-    if message then setStatus(message) end
-end
-
-local function startLook()
-    local target = selectedPlayer
-    if not target or target.Parent ~= Players then setStatus("Pilih target terlebih dahulu") return end
-    local tChar = target.Character
-    local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
-    if not tHum then setStatus("Target belum siap") return end
-    lookEnabled = true
-    lookToken = lookToken + 1
-    local myToken = lookToken
-    lookButton.Text = "LIHAT: ON"
-    lookButton.BackgroundColor3 = COLORS.green
-    setStatus("Melihat @" .. target.Name)
-    workspace.CurrentCamera.CameraSubject = tHum
-    lookConnection = RunService.Heartbeat:Connect(function()
-        if lookToken ~= myToken or not lookEnabled then return end
-        if gui.Parent == nil then stopLook(nil) return end
-        if selectedPlayer ~= target then stopLook("Target diganti") return end
-        if target.Parent ~= Players then stopLook("Target keluar server") return end
-        local c = target.Character
-        local h = c and c:FindFirstChildOfClass("Humanoid")
-        if not h then return end
-        if workspace.CurrentCamera.CameraSubject ~= h then
-            workspace.CurrentCamera.CameraSubject = h
-        end
-    end)
-end
-
-listen(lookButton.MouseButton1Click:Connect(function()
-    if lookEnabled then stopLook("Lihat player OFF") else startLook() end
-end))
-listen(localPlayer.CharacterAdded:Connect(function()
-    if lookEnabled then stopLook("Kamu respawn: lihat OFF") end
-end))
-
--- AUTO SOFA
+--====================================================
+-- AUTO SOFA (ORIGINAL, TIDAK DIUBAH)
+--====================================================
 local flingRunning = false
 local flingToken = 0
 local savedPivot = nil
@@ -771,7 +914,9 @@ local function releaseOwnCouch()
         end)
         local character = localPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        if humanoid then pcall(function() humanoid:UnequipTools() end) end
+        if humanoid then
+            pcall(function() humanoid:UnequipTools() end)
+        end
     end
     activeCouchTool = nil
 end
@@ -782,6 +927,7 @@ local function stopFling(restore)
     if pushForce then pushForce:Destroy(); pushForce = nil end
     if spinForce then spinForce:Destroy(); spinForce = nil end
     releaseOwnCouch()
+
     if restore and savedPivot and flingCharacter and flingCharacter.Parent
        and localPlayer.Character == flingCharacter then
         pcall(function()
@@ -795,6 +941,7 @@ local function stopFling(restore)
             end
         end)
     end
+
     savedPivot = nil
     flingCharacter = nil
     fling.Text = "AUTO SOFA : START"
@@ -804,27 +951,43 @@ end
 local function getCouch()
     local character = localPlayer.Character
     local backpack = localPlayer:FindFirstChildOfClass("Backpack")
-    if not character or not backpack then return nil, "Karakter atau Backpack tidak ada" end
+    if not character or not backpack then
+        return nil, "Karakter atau Backpack tidak ada"
+    end
     local found = character:FindFirstChild("Couch") or backpack:FindFirstChild("Couch")
     if found and found:IsA("Tool") then return found end
+
     local reFolder = ReplicatedStorage:FindFirstChild("RE")
     local remote = reFolder and reFolder:FindFirstChild("1Too1l")
-    if not remote or not remote:IsA("RemoteFunction") then return nil, "Remote Couch tidak ditemukan" end
-    local ok = pcall(function() remote:InvokeServer("PickingTools", "Couch") end)
+    if not remote or not remote:IsA("RemoteFunction") then
+        return nil, "Remote Couch tidak ditemukan"
+    end
+
+    local ok = pcall(function()
+        remote:InvokeServer("PickingTools", "Couch")
+    end)
     if not ok then return nil, "Permintaan Couch gagal" end
     local tool = backpack:WaitForChild("Couch", 3) or character:FindFirstChild("Couch")
-    if not tool or not tool:IsA("Tool") then return nil, "Couch tidak tersedia" end
+    if not tool or not tool:IsA("Tool") then
+        return nil, "Couch tidak tersedia"
+    end
     return tool
 end
 
 local function teleportToSelected()
-    if not selectedPlayer or selectedPlayer.Parent ~= Players then setStatus("Pilih target terlebih dahulu") return end
+    if not selectedPlayer or selectedPlayer.Parent ~= Players then
+        setStatus("Pilih target terlebih dahulu")
+        return
+    end
     if flingRunning then stopFling(true) end
     local character = localPlayer.Character
     local theirs = selectedPlayer.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
     local theirRoot = theirs and theirs:FindFirstChild("HumanoidRootPart")
-    if not root or not theirRoot then setStatus("Karakter target belum siap") return end
+    if not root or not theirRoot then
+        setStatus("Karakter target belum siap")
+        return
+    end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if humanoid then humanoid.Sit = false end
     character:PivotTo(theirRoot.CFrame * CFrame.new(0, -2, 1))
@@ -840,11 +1003,20 @@ local AUTO_SPIN_SPEED = 105
 local function getTargetSeat(target)
     local character = target and target.Character
     local hum = character and character:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return nil, "Target belum siap" end
+    if not hum or hum.Health <= 0 then
+        return nil, "Target belum siap"
+    end
+
     local seat = hum.SeatPart
-    if not seat or not (seat:IsA("Seat") or seat:IsA("VehicleSeat")) then return nil, "Target belum duduk di sofa" end
-    if not seat:IsDescendantOf(workspace) or seat.Occupant ~= hum then return nil, "Seat target tidak valid" end
-    if seat.Anchored then return nil, "Seat target Anchored" end
+    if not seat or not (seat:IsA("Seat") or seat:IsA("VehicleSeat")) then
+        return nil, "Target belum duduk di sofa"
+    end
+    if not seat:IsDescendantOf(workspace) or seat.Occupant ~= hum then
+        return nil, "Seat target tidak valid"
+    end
+    if seat.Anchored then
+        return nil, "Seat target Anchored"
+    end
     return seat
 end
 
@@ -858,19 +1030,31 @@ local function autoMoveSeatAndThrow(target, seat)
     local seatedRootPosition = beforeRoot and beforeRoot.Position or origin
     local seatDestinationPosition = origin + (AUTO_DESTINATION - seatedRootPosition)
     local destination = CFrame.new(seatDestinationPosition) * rotation
+
     local forward = pose.LookVector
     local horizontal = Vector3.new(forward.X, 0, forward.Z)
-    if horizontal.Magnitude < 0.01 then horizontal = Vector3.new(1, 0, 0)
-    else horizontal = horizontal.Unit end
+    if horizontal.Magnitude < 0.01 then
+        horizontal = Vector3.new(1, 0, 0)
+    else
+        horizontal = horizontal.Unit
+    end
     local velocity = horizontal * AUTO_SIDE_SPEED + Vector3.new(0, -AUTO_DOWN_SPEED, 0)
-    local okMove, errMove = pcall(function() seat:PivotTo(destination) end)
-    if not okMove then return false, "Teleport sofa gagal: " .. tostring(errMove):sub(1, 48) end
+
+    local okMove, errMove = pcall(function()
+        seat:PivotTo(destination)
+    end)
+    if not okMove then
+        return false, "Teleport sofa gagal: " .. tostring(errMove):sub(1, 48)
+    end
+
     local okThrow, errThrow = pcall(function()
         seat.AssemblyLinearVelocity = velocity
         seat.AssemblyAngularVelocity = Vector3.new(0, AUTO_SPIN_SPEED, 0)
         seat:ApplyImpulse(velocity * seat.AssemblyMass)
     end)
-    if not okThrow then warn("[XLORD V25] Impulse gagal:", tostring(errThrow)) end
+    if not okThrow then
+        warn("[XLORD V23] Impulse gagal:", tostring(errThrow))
+    end
     return true, string.format("Target TP ke X=%.2f Y=%.2f Z=%.2f (awal Y=%.0f); throw=%s",
         AUTO_DESTINATION.X, AUTO_DESTINATION.Y, AUTO_DESTINATION.Z,
         beforeY, okThrow and "dicoba" or "gagal")
@@ -889,8 +1073,13 @@ local function tryRestoreOwnHP(character)
         setStatus("AUTO selesai | HP sudah penuh: " .. math.floor(priorHP))
         return
     end
-    local ok = pcall(function() hum.Health = maxHP end)
-    if not ok then setStatus("AUTO selesai | Client tidak bisa mengubah HP") return end
+    local ok = pcall(function()
+        hum.Health = maxHP
+    end)
+    if not ok then
+        setStatus("AUTO selesai | Client tidak bisa mengubah HP")
+        return
+    end
     setStatus(string.format("AUTO selesai | Tes HP lokal %.0f -> %.0f (cek server)", priorHP, hum.Health))
     task.delay(1, function()
         if not gui.Parent or localPlayer.Character ~= character then return end
@@ -913,7 +1102,8 @@ local function watchCharacterDeath(character)
             or character:WaitForChild("Humanoid", 10)
         if not hum or not gui.Parent then return end
         listen(hum.Died:Connect(function()
-            if lastSafeRespawnPivot and os.clock() - lastAutoTimestamp < 14 then
+            if lastSafeRespawnPivot
+                and os.clock() - lastAutoTimestamp < 14 then
                 pendingRespawnPivot = lastSafeRespawnPivot
                 setStatus("HP = 0. Tunggu respawn normal, coba kembali ke posisi awal...")
             end
@@ -924,11 +1114,19 @@ end
 local function startFling()
     if flingRunning then return end
     local target = selectedPlayer
-    if not target or target.Parent ~= Players then setStatus("Pilih pemain target terlebih dahulu") return end
+    if not target or target.Parent ~= Players then
+        setStatus("Pilih pemain target terlebih dahulu")
+        return
+    end
+
     local character = localPlayer.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    if not root or not humanoid or humanoid.Health <= 0 then setStatus("Karakter kamu belum siap") return end
+    if not root or not humanoid or humanoid.Health <= 0 then
+        setStatus("Karakter kamu belum siap")
+        return
+    end
+
     flingRunning = true
     flingToken = flingToken + 1
     local myToken = flingToken
@@ -946,39 +1144,60 @@ local function startFling()
                 and target.Parent == Players
         end
         local seat, seatError = getTargetSeat(target)
+
         if not seat then
             setStatus("Menyiapkan sofa dan mendekati target...")
             local couch, err = getCouch()
             if not isCurrent() then return end
-            if not couch then stopFling(true); setStatus(err or "Gagal mengambil sofa") return end
+            if not couch then
+                stopFling(true)
+                setStatus(err or "Gagal mengambil sofa")
+                return
+            end
             activeCouchTool = couch
+
             local okEquip = pcall(function()
                 humanoid:EquipTool(couch)
                 task.wait(0.15)
                 couch:Activate()
             end)
             if not isCurrent() then return end
-            if not okEquip then stopFling(true); setStatus("Gagal mengaktifkan sofa") return end
+            if not okEquip then
+                stopFling(true)
+                setStatus("Gagal mengaktifkan sofa")
+                return
+            end
+
             local push = Instance.new("BodyVelocity")
             push.Name = "XLORD_AutoPush"
             push.MaxForce = Vector3.new(200000, 100000, 200000)
-            push.P = 12500; push.Velocity = Vector3.zero
-            push.Parent = root; pushForce = push
+            push.P = 12500
+            push.Velocity = Vector3.zero
+            push.Parent = root
+            pushForce = push
+
             local spin = Instance.new("BodyAngularVelocity")
             spin.Name = "XLORD_AutoSpin"
             spin.MaxTorque = Vector3.new(1e8, 1e8, 1e8)
-            spin.P = 50000; spin.AngularVelocity = Vector3.new(0, 110, 0)
-            spin.Parent = root; spinForce = spin
+            spin.P = 50000
+            spin.AngularVelocity = Vector3.new(0, 110, 0)
+            spin.Parent = root
+            spinForce = spin
+
             local started = os.clock()
             setStatus("Mencoba menangkap target di sofa (maks. 8 detik)...")
             while isCurrent() and os.clock() - started < MAX_AUTO_WAIT do
                 seat, seatError = getTargetSeat(target)
                 if seat then break end
                 if seatError == "Seat target Anchored" then break end
+
                 local targetChar = target.Character
                 local theirRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
                 local theirHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
-                if not theirRoot or not theirHum or theirHum.Health <= 0 or humanoid.Health <= 0 then break end
+                if not theirRoot or not theirHum or theirHum.Health <= 0
+                    or humanoid.Health <= 0 then
+                    break
+                end
                 local t = os.clock() - started
                 local angle = t * 28
                 local offset = Vector3.new(
@@ -989,43 +1208,60 @@ local function startFling()
                 pcall(function()
                     root.CFrame = CFrame.new(theirRoot.Position + offset, theirRoot.Position)
                     local direction = theirRoot.Position - root.Position
-                    if direction.Magnitude > 0.01 then push.Velocity = direction.Unit * 135 end
+                    if direction.Magnitude > 0.01 then
+                        push.Velocity = direction.Unit * 135
+                    end
                     root.AssemblyAngularVelocity = Vector3.new(0, 110, 0)
                 end)
                 RunService.Heartbeat:Wait()
             end
         end
+
         if not isCurrent() then return end
         if not seat then
             stopFling(true)
             setStatus("Auto dibatalkan: " .. (seatError or "target tidak duduk dalam 8 detik"))
             return
         end
+
         if pushForce then pushForce:Destroy(); pushForce = nil end
         if spinForce then spinForce:Destroy(); spinForce = nil end
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
+
         setStatus("Target duduk! TP ke X=52.65 Y=-573 Z=279.75...")
         local okMove, result = autoMoveSeatAndThrow(target, seat)
         if not isCurrent() then return end
-        if not okMove then stopFling(true); setStatus(result) return end
+        if not okMove then
+            stopFling(true)
+            setStatus(result)
+            return
+        end
+
         task.wait(0.18)
         if not isCurrent() then return end
         setStatus("Teleport selesai. Melepas sofa...")
         releaseOwnCouch()
         task.wait(0.08)
         if not isCurrent() then return end
+
         stopFling(true)
         setStatus("AUTO selesai: " .. result .. " | Sofa lepas, kamu kembali")
         lastAutoTimestamp = os.clock()
         tryRestoreOwnHP(character)
+        print("[XLORD V23] AUTO:", result)
+        print("[XLORD V23] HP dari client tidak menjamin server menerima heal")
     end)
 end
 
 listen(teleport.MouseButton1Click:Connect(teleportToSelected))
 listen(fling.MouseButton1Click:Connect(function()
-    if flingRunning then stopFling(true); setStatus("Auto Sofa dibatalkan, kembali ke posisi awal")
-    else startFling() end
+    if flingRunning then
+        stopFling(true)
+        setStatus("Auto Sofa dibatalkan, kembali ke posisi awal")
+    else
+        startFling()
+    end
 end))
 listen(localPlayer.CharacterAdded:Connect(function(newCharacter)
     if flingRunning then stopFling(false) end
@@ -1048,25 +1284,35 @@ listen(localPlayer.CharacterAdded:Connect(function(newCharacter)
 end))
 if localPlayer.Character then watchCharacterDeath(localPlayer.Character) end
 
+--====================================================
+-- PLAYER LIST
+--====================================================
 local function refreshPlayers()
     if not gui.Parent then return end
     for _, item in ipairs(scroll:GetChildren()) do
         if item:IsA("TextButton") then item:Destroy() end
     end
-    local needle = string.lower(search.Text or "")
+
+    local needle = search.Text:lower()
     local all = Players:GetPlayers()
-    table.sort(all, function(a, b) return string.lower(a.Name) < string.lower(b.Name) end)
+    table.sort(all, function(a, b)
+        return a.Name:lower() < b.Name:lower()
+    end)
+
     local index = 0
     for _, player in ipairs(all) do
         if player ~= localPlayer then
             local match = needle == ""
-                or string.find(string.lower(player.Name), needle, 1, true)
-                or string.find(string.lower(player.DisplayName), needle, 1, true)
+                or player.Name:lower():find(needle, 1, true)
+                or player.DisplayName:lower():find(needle, 1, true)
             if match then
                 index = index + 1
-                local row = button(scroll, "Player_" .. player.UserId,
+                local row = button(
+                    scroll,
+                    "Player_" .. player.UserId,
                     player.DisplayName .. " (@" .. player.Name .. ")",
-                    selectedPlayer == player and COLORS.selected or COLORS.row)
+                    selectedPlayer == player and COLORS.selected or COLORS.row
+                )
                 row.Size = UDim2.new(1, -15, 0, ROW_HEIGHT)
                 row.LayoutOrder = index
                 row.TextSize = 12
@@ -1074,6 +1320,7 @@ local function refreshPlayers()
                 row.TextTruncate = Enum.TextTruncate.AtEnd
                 row.MouseButton1Click:Connect(function()
                     if flingRunning then stopFling(true) end
+                    if pullRunning then stopPull("Target diganti, tarik berhenti") end
                     if lookEnabled then stopLook("Target diganti, lihat OFF") end
                     selectedPlayer = player
                     propTarget = player
@@ -1095,6 +1342,7 @@ listen(Players.PlayerAdded:Connect(refreshPlayers))
 listen(Players.PlayerRemoving:Connect(function(player)
     if player == selectedPlayer then
         if flingRunning then stopFling(true) end
+        if pullRunning then stopPull("Target keluar: tarik berhenti") end
         if lookEnabled then stopLook("Target keluar: lihat OFF") end
         selectedPlayer = nil
         propTarget = nil
@@ -1103,6 +1351,9 @@ listen(Players.PlayerRemoving:Connect(function(player)
     task.defer(refreshPlayers)
 end))
 
+--====================================================
+-- CLOSE CONFIRMATION + MINIMIZE
+--====================================================
 local overlay = Instance.new("Frame")
 overlay.Name = "CloseConfirmation"
 overlay.Size = UDim2.fromScale(1, 1)
@@ -1129,7 +1380,7 @@ local prompt = Instance.new("TextLabel")
 prompt.Size = UDim2.new(1, -14, 0, 77)
 prompt.Position = UDim2.fromOffset(7, 6)
 prompt.BackgroundTransparency = 1
-prompt.Text = "Yakin ingin menutup\nXLORD V25?"
+prompt.Text = "Yakin ingin menutup\nXLORD V23?"
 prompt.TextColor3 = Color3.new(1, 1, 1)
 prompt.Font = Enum.Font.GothamBold
 prompt.TextSize = 15
@@ -1146,20 +1397,30 @@ no.Position = UDim2.new(0.5, 5, 0, 96)
 no.Size = UDim2.new(0.5, -15, 0, 38)
 no.ZIndex = 22
 
-listen(close.MouseButton1Click:Connect(function() overlay.Visible = true end))
-listen(no.MouseButton1Click:Connect(function() overlay.Visible = false end))
-listen(yes.MouseButton1Click:Connect(function() gui:Destroy() end))
+listen(close.MouseButton1Click:Connect(function()
+    overlay.Visible = true
+end))
+listen(no.MouseButton1Click:Connect(function()
+    overlay.Visible = false
+end))
+listen(yes.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end))
 listen(minimize.MouseButton1Click:Connect(function()
     main.Visible = false
     floating.Visible = true
 end))
 
+--====================================================
+-- DRAG MAIN AND FLOATING BUTTON (touch + mouse).
+--====================================================
 local floatingWasDragged = false
 local function makeDraggable(object, handle, anchorCentered)
     local dragging = false
     local activeInput
     local startPointer
     local startAbsolute
+
     listen(handle.InputBegan:Connect(function(input)
         if overlay.Visible then return end
         if input.UserInputType ~= Enum.UserInputType.Touch
@@ -1177,13 +1438,18 @@ local function makeDraggable(object, handle, anchorCentered)
             end
         end)
     end))
+
     listen(UserInputService.InputChanged:Connect(function(input)
         if not dragging or not gui.Parent then return end
         if activeInput.UserInputType == Enum.UserInputType.Touch then
             if input ~= activeInput then return end
-        elseif input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+        elseif input.UserInputType ~= Enum.UserInputType.MouseMovement then
+            return
+        end
         local delta = input.Position - startPointer
-        if object == floating and delta.Magnitude >= 8 then floatingWasDragged = true end
+        if object == floating and delta.Magnitude >= 8 then
+            floatingWasDragged = true
+        end
         local view = viewportSize()
         local x = startAbsolute.X + delta.X
         local y = startAbsolute.Y + delta.Y
@@ -1197,6 +1463,7 @@ local function makeDraggable(object, handle, anchorCentered)
         object.Position = UDim2.fromOffset(x, y)
     end))
 end
+
 makeDraggable(main, header, true)
 makeDraggable(floating, floating, false)
 listen(floating.MouseButton1Click:Connect(function()
@@ -1206,7 +1473,10 @@ listen(floating.MouseButton1Click:Connect(function()
     updateCanvas(false)
 end))
 
--- PANEL PROP FOLLOW
+
+--====================================================
+-- PROP FOLLOW (ORIGINAL)
+--====================================================
 local SEND_INTERVAL = 0.07
 local MIN_MOVEMENT = 0.10
 local BASE_PREDICTION = 0.10
@@ -1281,9 +1551,9 @@ local heightBox = propMake("TextBox", "HeightOffset", "0", 151, 29, COLORS.field
 heightBox.ClearTextOnFocus = false
 heightBox.PlaceholderText = "Offset dari kaki (studs)"
 local toggle = propMake("TextButton", "ToggleFollow", "ON | FAST FOLLOW FEET", 184, 34, COLORS.green)
-local propStatus = propMake("TextLabel", "PropStatus", "Status: Siap", 222, 29)
-propStatus.TextWrapped = true
-propStatus.TextSize = 11
+local status = propMake("TextLabel", "PropStatus", "Status: Siap", 222, 29)
+status.TextWrapped = true
+status.TextSize = 11
 local stats = propMake("TextLabel", "PropStats", "RTT: - | Calls OK: 0 | Error: 0", 253, 22)
 stats.TextSize = 10
 
@@ -1312,7 +1582,8 @@ end
 
 local function notify(message)
     if not gui.Parent then return end
-    propStatus.Text = tostring(message)
+    status.Text = tostring(message)
+    print("[XLORD FEET] " .. tostring(message))
 end
 
 listen(propModeButton.MouseButton1Click:Connect(function()
@@ -1338,9 +1609,14 @@ end))
 
 local function updateStats()
     if not propAlive then return end
-    stats.Text = string.format("RTT: %dms | Calls OK: %d | Error: %d",
-        math.floor(lastRTT * 1000), successCount, errorCount)
+    stats.Text = string.format(
+        "RTT: %dms | Calls OK: %d | Error: %d",
+        math.floor(lastRTT * 1000),
+        successCount,
+        errorCount
+    )
 end
+
 local function updateToggle()
     if running then
         toggle.Text = "OFF | STOP FOLLOW"
@@ -1350,9 +1626,12 @@ local function updateToggle()
         toggle.BackgroundColor3 = Color3.fromRGB(25, 150, 85)
     end
 end
+
 local function openPicker(items, callback)
     for _, child in ipairs(picker:GetChildren()) do
-        if child:IsA("TextButton") then child:Destroy() end
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
     end
     for i, item in ipairs(items) do
         local btn = Instance.new("TextButton")
@@ -1373,50 +1652,66 @@ local function openPicker(items, callback)
     picker.CanvasSize = UDim2.fromOffset(0, #items * 39 + 8)
     picker.Visible = true
 end
+
 local function scanProps()
     local ownedFound, fallbackFound = {}, {}
     local seen = {}
-    local username = string.lower(localPlayer.Name)
+    local username = localPlayer.Name:lower()
     local ownedName = "prop" .. username
+
     local folders = {
         workspace:FindFirstChild("WorkspaceCom"),
         workspace:FindFirstChild("bh_Props"),
         workspace:FindFirstChild("Props")
     }
+
     local function inspect(obj)
         if not (obj:IsA("Model") or obj:IsA("BasePart")) then return end
         if seen[obj] then return end
-        local name = string.lower(obj.Name or "")
+        local name = obj.Name:lower()
         local remote = obj:FindFirstChild("SetCurrentCFrame", true)
         if not remote or not remote:IsA("RemoteFunction") then return end
         seen[obj] = true
         local entry = { object = obj, remote = remote }
         local ownerMatch = name == ownedName
-            or (string.find(name, "prop", 1, true) and string.find(name, username, 1, true))
-        if ownerMatch then table.insert(ownedFound, entry)
-        elseif string.find(name, "prop", 1, true) then table.insert(fallbackFound, entry) end
+            or (name:find("prop", 1, true) and name:find(username, 1, true))
+        if ownerMatch then
+            table.insert(ownedFound, entry)
+        elseif name:find("prop", 1, true) then
+            table.insert(fallbackFound, entry)
+        end
     end
+
     for _, folder in ipairs(folders) do
         if folder then
-            for _, obj in ipairs(folder:GetDescendants()) do inspect(obj) end
+            for _, obj in ipairs(folder:GetDescendants()) do
+                inspect(obj)
+            end
             inspect(folder)
         end
     end
+
     if #ownedFound > 0 then return ownedFound, false end
     return fallbackFound, #fallbackFound > 0
 end
+
 local function calculateBottomOffset(obj)
     local ok, result = pcall(function()
         local pivot = obj:GetPivot()
         local boundsCF, boundsSize
-        if obj:IsA("Model") then boundsCF, boundsSize = obj:GetBoundingBox()
-        else boundsCF = obj.CFrame; boundsSize = obj.Size end
+        if obj:IsA("Model") then
+            boundsCF, boundsSize = obj:GetBoundingBox()
+        else
+            boundsCF = obj.CFrame
+            boundsSize = obj.Size
+        end
         local lowestY = boundsCF.Position.Y - boundsSize.Y / 2
         return pivot.Position.Y - lowestY
     end)
     if ok and type(result) == "number" then return result end
     return 0
 end
+
 local function selectProp(data)
     selectedProp = data.object
     selectedRemote = data.remote
@@ -1426,19 +1721,35 @@ local function selectProp(data)
     propLabel.Text = "Prop: " .. selectedProp.Name
     notify(string.format("Prop dipilih | Bottom offset: %.2f", bottomOffset))
 end
+
 propBind(propBtn.MouseButton1Click, function()
-    if running then notify("STOP dahulu untuk scan prop") return end
+    if running then
+        notify("STOP dahulu untuk scan prop")
+        return
+    end
     notify("Scanning prop...")
     local found, fallbackScan = scanProps()
-    if #found == 0 then notify("Prop tidak ditemukan. Spawn manual dahulu.") return end
-    if fallbackScan then notify("Prop pemilik tidak terdeteksi dari nama; pilih kandidat prop yang sesuai") end
-    if #found == 1 then selectProp(found[1]) return end
+    if #found == 0 then
+        notify("Prop tidak ditemukan. Spawn manual dahulu.")
+        return
+    end
+    if fallbackScan then
+        notify("Prop pemilik tidak terdeteksi dari nama; pilih kandidat prop yang sesuai")
+    end
+    if #found == 1 then
+        selectProp(found[1])
+        return
+    end
     local items = {}
     for i, data in ipairs(found) do
-        table.insert(items, { label = "Prop " .. i .. " | " .. data.object.Name, value = data })
+        table.insert(items, {
+            label = "Prop " .. i .. " | " .. data.object.Name,
+            value = data
+        })
     end
     openPicker(items, selectProp)
 end)
+
 local function getTargetRoot()
     propTarget = selectedPlayer
     if not propTarget or propTarget.Parent ~= Players then return nil end
@@ -1446,6 +1757,7 @@ local function getTargetRoot()
     if not character then return nil end
     return character:FindFirstChild("HumanoidRootPart")
 end
+
 local function getFootHeight(root)
     local character = root.Parent
     local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -1453,6 +1765,7 @@ local function getFootHeight(root)
     local distance = humanoid.HipHeight + root.Size.Y / 2
     return root.Position.Y - distance
 end
+
 local function calculatePosition(root)
     local heightOffset = math.clamp(tonumber(heightBox.Text) or 0, -10, 20)
     local velocity = root.AssemblyLinearVelocity
@@ -1460,30 +1773,51 @@ local function calculatePosition(root)
     if horizontalVelocity.Magnitude > MAX_VELOCITY then
         horizontalVelocity = horizontalVelocity.Unit * MAX_VELOCITY
     end
-    local predictionTime = math.clamp(BASE_PREDICTION + lastRTT * 0.5, BASE_PREDICTION, MAX_PREDICTION)
+    local predictionTime = math.clamp(
+        BASE_PREDICTION + lastRTT * 0.5, BASE_PREDICTION, MAX_PREDICTION
+    )
     local predicted = horizontalVelocity * predictionTime
     local footY = getFootHeight(root)
     local finalY = footY + bottomOffset + heightOffset
-    return Vector3.new(root.Position.X + predicted.X, finalY, root.Position.Z + predicted.Z)
+    return Vector3.new(
+        root.Position.X + predicted.X,
+        finalY,
+        root.Position.Z + predicted.Z
+    )
 end
+
 local function followLoop(myToken)
     local lastPosition = nil
     local lastStatus = 0
     local consecutiveErrors = 0
+
     while running and propAlive and token == myToken do
         local root = getTargetRoot()
-        if not root then notify("Menunggu target...") task.wait(0.2) continue end
-        if not selectedProp or not selectedProp.Parent then notify("Prop hilang") break end
+        if not root then
+            notify("Menunggu target...")
+            task.wait(0.2)
+            continue
+        end
+        if not selectedProp or not selectedProp.Parent then
+            notify("Prop hilang")
+            break
+        end
         local remote = selectedRemote
         if not remote or not remote.Parent or not remote:IsA("RemoteFunction") then
-            notify("Remote prop hilang") break
+            notify("Remote prop hilang")
+            break
         end
+
         local position = calculatePosition(root)
-        local moved = not lastPosition or (position - lastPosition).Magnitude >= MIN_MOVEMENT
+        local moved = not lastPosition
+            or (position - lastPosition).Magnitude >= MIN_MOVEMENT
+
         if moved then
             local goal = CFrame.new(position) * rotation
             local startTime = os.clock()
-            local ok, result = pcall(function() return remote:InvokeServer(goal) end)
+            local ok, result = pcall(function()
+                return remote:InvokeServer(goal)
+            end)
             lastRTT = os.clock() - startTime
             if not running or token ~= myToken then break end
             if ok and result ~= false then
@@ -1491,62 +1825,94 @@ local function followLoop(myToken)
                 consecutiveErrors = 0
                 lastPosition = position
                 if os.clock() - lastStatus >= 0.8 then
-                    notify("FOLLOW KAKI: @" .. (propTarget and propTarget.Name or "target"))
-                    updateStats(); lastStatus = os.clock()
+                    notify("FOLLOW KAKI: @" ..
+                        (propTarget and propTarget.Name or "target"))
+                    updateStats()
+                    lastStatus = os.clock()
                 end
             else
                 errorCount += 1
                 consecutiveErrors += 1
                 notify("Remote error: " .. tostring(result))
                 updateStats()
-                if consecutiveErrors >= MAX_ERRORS then notify("STOP: Terlalu banyak error") break end
+                if consecutiveErrors >= MAX_ERRORS then
+                    notify("STOP: Terlalu banyak error")
+                    break
+                end
                 task.wait(ERROR_DELAY)
             end
         end
         task.wait(SEND_INTERVAL)
     end
-    if token == myToken then running = false; updateToggle(); updateStats() end
+
+    if token == myToken then
+        running = false
+        updateToggle()
+        updateStats()
+    end
 end
+
 local function stopFollow()
-    running = false; token += 1; updateToggle(); updateStats(); notify("Follow dihentikan")
+    running = false
+    token += 1
+    updateToggle()
+    updateStats()
+    notify("Follow dihentikan")
 end
+
 local function startFollow()
     if running then return end
-    if not propTarget then notify("Pilih pemain dahulu") return end
-    if not selectedProp then notify("Scan prop dahulu") return end
-    if not selectedProp.Parent then notify("Prop sudah tidak tersedia") return end
-    if not selectedRemote or not selectedRemote.Parent then notify("Remote prop tidak tersedia") return end
-    if not getTargetRoot() then notify("Karakter target belum tersedia") return end
-    running = true; token += 1
-    lastRTT = 0; successCount = 0; errorCount = 0
-    updateToggle(); updateStats()
-    notify("FAST FOLLOW FEET: @" .. (propTarget and propTarget.Name or "target"))
+    if not propTarget then notify("Pilih pemain dahulu"); return end
+    if not selectedProp then notify("Scan prop dahulu"); return end
+    if not selectedProp.Parent then notify("Prop sudah tidak tersedia"); return end
+    if not selectedRemote or not selectedRemote.Parent then
+        notify("Remote prop tidak tersedia"); return
+    end
+    if not getTargetRoot() then
+        notify("Karakter target belum tersedia"); return
+    end
+
+    running = true
+    token += 1
+    lastRTT = 0
+    successCount = 0
+    errorCount = 0
+    updateToggle()
+    updateStats()
+    notify("FAST FOLLOW FEET: @" ..
+        (propTarget and propTarget.Name or "target"))
     local myToken = token
     task.spawn(function() followLoop(myToken) end)
 end
+
 propBind(toggle.MouseButton1Click, function()
     if running then stopFollow() else startFollow() end
 end)
-notify("Siap | Spawn prop lalu SCAN PROP")
 
+notify("Siap | Spawn prop lalu SCAN PROP")
+print("[XLORD V23] Integrated prop follow loaded")
+
+--====================================================
+-- CLEANUP AND RUN
+--====================================================
 gui.Destroying:Connect(function()
     propAlive = false
     running = false
     token += 1
     setAntiSit(false)
+    if pullRunning then stopPull(nil) end
     if lookEnabled then stopLook(nil) end
     for _, connection in ipairs(propConnections) do
         pcall(function() connection:Disconnect() end)
     end
     if trampolinePreview then trampolinePreview:Destroy(); trampolinePreview = nil end
     stopFling(true)
-    if cameraConnection then pcall(function() cameraConnection:Disconnect() end) end
+    if cameraConnection then cameraConnection:Disconnect() end
     for _, connection in ipairs(connections) do
-        if connection.Connected then
-            pcall(function() connection:Disconnect() end)
-        end
+        if connection.Connected then connection:Disconnect() end
     end
+    table.clear(connections)
 end)
 
 refreshPlayers()
-print("[XLORD V25] Loaded OK")
+print("[XLORD V23] Loaded: Auto Sofa, Teleport, TARIK PLAYER, LIHAT PLAYER, genuine server trampoline activation TEST, XYZ, resize, minimize")
