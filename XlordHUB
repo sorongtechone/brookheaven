@@ -1,18 +1,10 @@
---====================================================
--- XLORD HUB V25 FIX | BROOKHAVEN RP
--- * Tanpa panel MUSIK, tanpa TARIK
--- * Copy Avatar di footer
--- * Anti error load: pembersih GUI aman, tanpa table.clear
---====================================================
+
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
---====================================================
--- ANTI SIT
---====================================================
 local antiSitEnabled = false
 local antiSitHumanoidConnection = nil
 local antiSitCharacterConnection = nil
