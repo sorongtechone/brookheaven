@@ -4,9 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
---====================================================
--- ANTI SIT
---====================================================
+
 local antiSitEnabled = false
 local antiSitHumanoidConnection = nil
 local antiSitCharacterConnection = nil
