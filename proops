@@ -1,0 +1,465 @@
+--====================================================
+-- XLORD PROP ARMY | MOVE ALL MY PROPS
+-- Semua prop milikmu mengikuti kamu dengan formasi grid
+-- dan jarak spasi antar prop.
+--====================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+-- Bersihkan GUI lama
+for _, child in ipairs(playerGui:GetChildren()) do
+    if child:IsA("ScreenGui") and child.Name:find("XLORD_PropArmy") then
+        child:Destroy()
+    end
+end
+
+local connections = {}
+local function listen(conn)
+    table.insert(connections, conn)
+    return conn
+end
+
+local function round(obj, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 8)
+    c.Parent = obj
+end
+
+local COLORS = {
+    panel = Color3.fromRGB(25, 27, 38),
+    field = Color3.fromRGB(43, 46, 62),
+    list = Color3.fromRGB(33, 36, 49),
+    blue = Color3.fromRGB(49, 104, 215),
+    green = Color3.fromRGB(42, 143, 100),
+    red = Color3.fromRGB(205, 55, 65),
+    gray = Color3.fromRGB(70, 74, 92),
+    purple = Color3.fromRGB(119, 74, 190),
+    orange = Color3.fromRGB(185, 105, 38),
+}
+
+local function button(parent, name, caption, color)
+    local b = Instance.new("TextButton")
+    b.Name = name
+    b.BackgroundColor3 = color
+    b.BorderSizePixel = 0
+    b.Text = caption
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.TextSize = 12
+    b.Font = Enum.Font.GothamBold
+    b.AutoButtonColor = true
+    b.Parent = parent
+    round(b, 7)
+    return b
+end
+
+--====================================================
+-- GUI
+--====================================================
+local gui = Instance.new("ScreenGui")
+gui.Name = "XLORD_PropArmy"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 999
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
+
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.AnchorPoint = Vector2.new(0, 0)
+main.Position = UDim2.fromOffset(20, 20)
+main.Size = UDim2.fromOffset(290, 380)
+main.BackgroundColor3 = COLORS.panel
+main.BackgroundTransparency = 0.1
+main.BorderSizePixel = 0
+main.Active = true
+main.Parent = gui
+round(main, 12)
+
+local header = Instance.new("TextLabel")
+header.Name = "DragHeader"
+header.BackgroundTransparency = 1
+header.Text = "PROP ARMY | FOLLOW"
+header.Position = UDim2.fromOffset(10, 0)
+header.Size = UDim2.fromOffset(200, 40)
+header.TextXAlignment = Enum.TextXAlignment.Left
+header.TextColor3 = Color3.new(1, 1, 1)
+header.TextSize = 14
+header.Font = Enum.Font.GothamBold
+header.Active = true
+header.Parent = main
+
+local closeBtn = button(main, "Close", "X", COLORS.red)
+closeBtn.Size = UDim2.fromOffset(28, 28)
+closeBtn.Position = UDim2.fromOffset(252, 6)
+
+--====================================================
+-- KONTROL
+--====================================================
+local scanBtn = button(main, "Scan", "SCAN SEMUA PROP SAYA", COLORS.purple)
+scanBtn.Position = UDim2.fromOffset(10, 46)
+scanBtn.Size = UDim2.fromOffset(270, 32)
+
+local toggleBtn = button(main, "Toggle", "MULAI FOLLOW: OFF", COLORS.green)
+toggleBtn.Position = UDim2.fromOffset(10, 84)
+toggleBtn.Size = UDim2.fromOffset(270, 36)
+
+-- Pengaturan jarak
+local spacingLabel = Instance.new("TextLabel")
+spacingLabel.BackgroundTransparency = 1
+spacingLabel.Text = "Jarak antar prop (studs):"
+spacingLabel.Position = UDim2.fromOffset(10, 128)
+spacingLabel.Size = UDim2.fromOffset(270, 18)
+spacingLabel.TextXAlignment = Enum.TextXAlignment.Left
+spacingLabel.TextColor3 = Color3.fromRGB(200, 205, 220)
+spacingLabel.TextSize = 11
+spacingLabel.Font = Enum.Font.Gotham
+spacingLabel.Parent = main
+
+local spacingBox = Instance.new("TextBox")
+spacingBox.Name = "SpacingBox"
+spacingBox.BackgroundColor3 = COLORS.field
+spacingBox.BorderSizePixel = 0
+spacingBox.Text = "6"
+spacingBox.Position = UDim2.fromOffset(10, 148)
+spacingBox.Size = UDim2.fromOffset(80, 28)
+spacingBox.TextColor3 = Color3.new(1, 1, 1)
+spacingBox.PlaceholderText = "studs"
+spacingBox.TextSize = 12
+spacingBox.Font = Enum.Font.Gotham
+spacingBox.ClearTextOnFocus = false
+spacingBox.Parent = main
+round(spacingBox, 7)
+
+-- Baris grid
+local rowLabel = Instance.new("TextLabel")
+rowLabel.BackgroundTransparency = 1
+rowLabel.Text = "Prop per baris:"
+rowLabel.Position = UDim2.fromOffset(100, 128)
+rowLabel.Size = UDim2.fromOffset(180, 18)
+rowLabel.TextXAlignment = Enum.TextXAlignment.Left
+rowLabel.TextColor3 = Color3.fromRGB(200, 205, 220)
+rowLabel.TextSize = 11
+rowLabel.Font = Enum.Font.Gotham
+rowLabel.Parent = main
+
+local rowBox = Instance.new("TextBox")
+rowBox.Name = "RowBox"
+rowBox.BackgroundColor3 = COLORS.field
+rowBox.BorderSizePixel = 0
+rowBox.Text = "3"
+rowBox.Position = UDim2.fromOffset(100, 148)
+rowBox.Size = UDim2.fromOffset(80, 28)
+rowBox.TextColor3 = Color3.new(1, 1, 1)
+rowBox.PlaceholderText = "jumlah"
+rowBox.TextSize = 12
+rowBox.Font = Enum.Font.Gotham
+rowBox.ClearTextOnFocus = false
+rowBox.Parent = main
+round(rowBox, 7)
+
+-- Offset tinggi (biar prop tidak tenggelam)
+local heightLabel = Instance.new("TextLabel")
+heightLabel.BackgroundTransparency = 1
+heightLabel.Text = "Offset tinggi (studs):"
+heightLabel.Position = UDim2.fromOffset(190, 128)
+heightLabel.Size = UDim2.fromOffset(90, 18)
+heightLabel.TextXAlignment = Enum.TextXAlignment.Left
+heightLabel.TextColor3 = Color3.fromRGB(200, 205, 220)
+heightLabel.TextSize = 11
+heightLabel.Font = Enum.Font.Gotham
+heightLabel.Parent = main
+
+local heightBox = Instance.new("TextBox")
+heightBox.Name = "HeightBox"
+heightBox.BackgroundColor3 = COLORS.field
+heightBox.BorderSizePixel = 0
+heightBox.Text = "3"
+heightBox.Position = UDim2.fromOffset(190, 148)
+heightBox.Size = UDim2.fromOffset(80, 28)
+heightBox.TextColor3 = Color3.new(1, 1, 1)
+heightBox.PlaceholderText = "studs"
+heightBox.TextSize = 12
+heightBox.Font = Enum.Font.Gotham
+heightBox.ClearTextOnFocus = false
+heightBox.Parent = main
+round(heightBox, 7)
+
+-- Info
+local info = Instance.new("TextLabel")
+info.Name = "Info"
+info.BackgroundTransparency = 1
+info.Text = "Prop terdeteksi: 0"
+info.Position = UDim2.fromOffset(10, 184)
+info.Size = UDim2.fromOffset(270, 20)
+info.TextXAlignment = Enum.TextXAlignment.Left
+info.TextColor3 = Color3.fromRGB(140, 205, 255)
+info.TextSize = 12
+info.Font = Enum.Font.GothamBold
+info.Parent = main
+
+-- List prop (scrolling)
+local listFrame = Instance.new("ScrollingFrame")
+listFrame.Name = "PropList"
+listFrame.BackgroundColor3 = COLORS.list
+listFrame.BorderSizePixel = 0
+listFrame.Position = UDim2.fromOffset(10, 208)
+listFrame.Size = UDim2.fromOffset(270, 120)
+listFrame.ScrollBarThickness = 4
+listFrame.CanvasSize = UDim2.fromOffset(0, 0)
+listFrame.Parent = main
+round(listFrame, 8)
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 4)
+listLayout.Parent = listFrame
+
+-- Status
+local status = Instance.new("TextLabel")
+status.Name = "Status"
+status.BackgroundTransparency = 1
+status.Text = "Siap | Scan prop dulu"
+status.Position = UDim2.fromOffset(10, 334)
+status.Size = UDim2.fromOffset(270, 38)
+status.TextWrapped = true
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.TextColor3 = Color3.fromRGB(190, 194, 207)
+status.TextSize = 11
+status.Font = Enum.Font.Gotham
+status.Parent = main
+
+local function setStatus(msg)
+    if gui.Parent then status.Text = tostring(msg) end
+end
+
+--====================================================
+-- STATE
+--====================================================
+local myProps = {}          -- {object, remote, offsetY}
+local followRunning = false
+local followToken = 0
+local propConnections = {}
+
+--====================================================
+-- SCAN PROP MILIK SENDIRI
+--====================================================
+local function scanMyProps()
+    myProps = {}
+    local seen = {}
+    local username = localPlayer.Name:lower()
+    local ownedName = "prop" .. username
+    local folders = {
+        workspace:FindFirstChild("WorkspaceCom"),
+        workspace:FindFirstChild("bh_Props"),
+        workspace:FindFirstChild("Props"),
+    }
+
+    local function inspect(obj)
+        if not (obj:IsA("Model") or obj:IsA("BasePart")) then return end
+        if seen[obj] then return end
+        local name = obj.Name:lower()
+        local remote = obj:FindFirstChild("SetCurrentCFrame", true)
+        if not remote or not remote:IsA("RemoteFunction") then return end
+        -- cek kepemilikan
+        local ownerMatch = name == ownedName
+            or (name:find("prop", 1, true) and name:find(username, 1, true))
+        if not ownerMatch then return end
+        seen[obj] = true
+        table.insert(myProps, {
+            object = obj,
+            remote = remote,
+        })
+    end
+
+    for _, folder in ipairs(folders) do
+        if folder then
+            for _, obj in ipairs(folder:GetDescendants()) do inspect(obj) end
+            inspect(folder)
+        end
+    end
+
+    -- urutkan berdasarkan nama biar stabil
+    table.sort(myProps, function(a, b)
+        return a.object.Name:lower() < b.object.Name:lower()
+    end)
+
+    -- tampilkan di list
+    for _, child in ipairs(listFrame:GetChildren()) do
+        if child:IsA("TextLabel") then child:Destroy() end
+    end
+    for i, data in ipairs(myProps) do
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, -8, 0, 22)
+        lbl.LayoutOrder = i
+        lbl.BackgroundColor3 = Color3.fromRGB(50, 54, 73)
+        lbl.Text = " " .. i .. ". " .. data.object.Name
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.TextColor3 = Color3.new(1, 1, 1)
+        lbl.TextSize = 11
+        lbl.Font = Enum.Font.Gotham
+        lbl.Parent = listFrame
+        round(lbl, 4)
+    end
+    listFrame.CanvasSize = UDim2.fromOffset(0, #myProps * 26 + 8)
+    info.Text = "Prop terdeteksi: " .. #myProps
+    setStatus(#myProps > 0
+        and ("Ditemukan " .. #myProps .. " prop milikmu. Atur jarak lalu MULAI.")
+        or "Tidak ada prop milikmu. Spawn prop manual dahulu.")
+end
+
+listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
+
+--====================================================
+-- HITUNG POSISI GRID
+--====================================================
+-- Posisi grid relatif terhadap root player, di belakang player.
+-- Grid: rowBox prop per baris, spacingBox jarak antar prop.
+local function computeGridPosition(index, total, rootCF, spacing, perRow, heightOffset)
+    local row = math.floor((index - 1) / perRow)
+    local col = (index - 1) % perRow
+    -- center kolom
+    local rowCount = math.min(perRow, total - row * perRow)
+    local colOffset = (col - (rowCount - 1) / 2) * spacing
+    -- baris ke belakang (di belakang player)
+    local backOffset = (row + 1) * spacing
+    -- local space: X = kiri/kanan, Z = belakang (negatif karena LookVector ke depan)
+    local localPos = Vector3.new(colOffset, heightOffset, -backOffset)
+    return rootCF * localPos
+end
+
+--====================================================
+-- FOLLOW LOOP
+--====================================================
+local function stopFollow()
+    followRunning = false
+    followToken += 1
+    toggleBtn.Text = "MULAI FOLLOW: OFF"
+    toggleBtn.BackgroundColor3 = COLORS.green
+    setStatus("Follow dihentikan.")
+end
+
+local function startFollow()
+    if followRunning then return end
+    if #myProps == 0 then
+        setStatus("Scan prop dulu sebelum mulai.")
+        return
+    end
+
+    local spacing = math.clamp(tonumber(spacingBox.Text) or 6, 1, 40)
+    local perRow = math.clamp(math.floor(tonumber(rowBox.Text) or 3), 1, 20)
+    local heightOffset = math.clamp(tonumber(heightBox.Text) or 3, -10, 30)
+
+    followRunning = true
+    followToken += 1
+    local myToken = followToken
+    toggleBtn.Text = "STOP FOLLOW"
+    toggleBtn.BackgroundColor3 = COLORS.red
+    setStatus("Follow ON | " .. #myProps .. " prop | jarak " .. spacing .. " studs")
+
+    local total = #myProps
+    -- counter untuk throttle status
+    local lastStatusTime = 0
+
+    listen(RunService.Heartbeat:Connect(function()
+        if not followRunning or followToken ~= myToken then return end
+        if not gui.Parent then stopFollow() return end
+
+        local char = localPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then
+            if os.clock() - lastStatusTime > 1 then
+                setStatus("Menunggu karakter...")
+                lastStatusTime = os.clock()
+            end
+            return
+        end
+
+        local rootCF = root.CFrame
+        local okCount, errCount = 0, 0
+
+        for i, data in ipairs(myProps) do
+            local obj = data.object
+            local remote = data.remote
+            if obj and obj.Parent and remote and remote.Parent and remote:IsA("RemoteFunction") then
+                local goalPos = computeGridPosition(i, total, rootCF, spacing, perRow, heightOffset)
+                -- pertahankan rotasi asli prop
+                local okRot, origCF = pcall(function() return obj:GetPivot() end)
+                local goalCF = CFrame.new(goalPos)
+                if okRot then
+                    goalCF = CFrame.new(goalPos) * origCF.Rotation
+                end
+                local ok = pcall(function() remote:InvokeServer(goalCF) end)
+                if ok then okCount += 1 else errCount += 1 end
+            else
+                errCount += 1
+            end
+        end
+
+        if os.clock() - lastStatusTime > 0.5 then
+            setStatus(string.format("Follow ON | OK: %d | Error: %d", okCount, errCount))
+            lastStatusTime = os.clock()
+        end
+    end))
+end
+
+listen(toggleBtn.MouseButton1Click:Connect(function()
+    if followRunning then stopFollow() else startFollow() end
+end))
+
+--====================================================
+-- DRAG
+--====================================================
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+listen(header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+       or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end))
+listen(UserInputService.InputChanged:Connect(function(input)
+    if not dragging then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+       or input.UserInputType == Enum.UserInputType.Touch then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end))
+
+--====================================================
+-- CLOSE
+--====================================================
+listen(closeBtn.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end))
+
+gui.Destroying:Connect(function()
+    followRunning = false
+    followToken += 1
+    for _, c in ipairs(propConnections) do
+        pcall(function() c:Disconnect() end)
+    end
+    for _, c in ipairs(connections) do
+        if c.Connected then c:Disconnect() end
+    end
+    table.clear(connections)
+end)
+
+setStatus("Siap | Tekan SCAN SEMUA PROP SAYA")
+print("[XLORD Prop Army] Loaded")
