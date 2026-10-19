@@ -1,3 +1,15 @@
+--====================================================
+-- XLORD GIANT MONSTER | CUSTOM SKELETON v2
+-- Skeleton: kepala 1, badan 1, tangan kiri 3, tangan kanan 3,
+-- kaki kiri 2, kaki kanan 2. Total 9 slot utama.
+-- Prop ekstra -> aura di sekitar badan.
+--
+-- v2:
+--   * Semua prop DILURUSKAN (rotasi ikut monster, bukan rotasi asli)
+--   * Toggle LURUSKAN ON/OFF
+--   * Slider skala monster lebih besar (sampai 50)
+--   * Animasi tangan/kaki ayun
+--====================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -63,7 +75,7 @@ local main = Instance.new("Frame")
 main.Name = "Main"
 main.AnchorPoint = Vector2.new(0, 0)
 main.Position = UDim2.fromOffset(20, 20)
-main.Size = UDim2.fromOffset(310, 470)
+main.Size = UDim2.fromOffset(320, 520)
 main.BackgroundColor3 = COLORS.panel
 main.BackgroundTransparency = 0.1
 main.BorderSizePixel = 0
@@ -74,7 +86,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "GIANT MONSTER | ANIM"
+header.Text = "GIANT MONSTER | v2"
 header.Position = UDim2.fromOffset(10, 0)
 header.Size = UDim2.fromOffset(230, 40)
 header.TextXAlignment = Enum.TextXAlignment.Left
@@ -86,19 +98,25 @@ header.Parent = main
 
 local closeBtn = button(main, "Close", "X", COLORS.red)
 closeBtn.Size = UDim2.fromOffset(28, 28)
-closeBtn.Position = UDim2.fromOffset(272, 6)
+closeBtn.Position = UDim2.fromOffset(282, 6)
 
 local scanBtn = button(main, "Scan", "SCAN SEMUA PROP SAYA", COLORS.purple)
 scanBtn.Position = UDim2.fromOffset(10, 46)
-scanBtn.Size = UDim2.fromOffset(290, 32)
+scanBtn.Size = UDim2.fromOffset(300, 32)
 
 local followBtn = button(main, "Follow", "FOLLOW SAYA: OFF", COLORS.green)
 followBtn.Position = UDim2.fromOffset(10, 84)
-followBtn.Size = UDim2.fromOffset(140, 34)
+followBtn.Size = UDim2.fromOffset(145, 34)
 
 local attackBtn = button(main, "Attack", "KEJAR TARGET: OFF", COLORS.orange)
-attackBtn.Position = UDim2.fromOffset(160, 84)
-attackBtn.Size = UDim2.fromOffset(140, 34)
+attackBtn.Position = UDim2.fromOffset(165, 84)
+attackBtn.Size = UDim2.fromOffset(145, 34)
+
+-- Toggle LURUSKAN
+local straightenBtn = button(main, "Straighten", "LURUSKAN: ON", COLORS.blue)
+straightenBtn.Position = UDim2.fromOffset(10, 126)
+straightenBtn.Size = UDim2.fromOffset(300, 30)
+local straightenEnabled = true
 
 -- Parameter
 local function makeField(labelText, defaultText, x, y, w)
@@ -127,16 +145,16 @@ local function makeField(labelText, defaultText, x, y, w)
     return box
 end
 
-local scaleBox  = makeField("Skala monster:", "3", 10, 126, 92)
-local distBox   = makeField("Jarak ke kamu:", "8", 110, 126, 92)
-local heightBox = makeField("Tinggi:", "2", 210, 126, 92)
+local scaleBox  = makeField("Skala monster:", "5", 10, 164, 96)
+local distBox   = makeField("Jarak ke kamu:", "12", 116, 164, 96)
+local heightBox = makeField("Tinggi:", "2", 222, 164, 88)
 
 local info = Instance.new("TextLabel")
 info.Name = "Info"
 info.BackgroundTransparency = 1
 info.Text = "Prop: 0 | Slot tubuh: 0/9"
-info.Position = UDim2.fromOffset(10, 176)
-info.Size = UDim2.fromOffset(290, 20)
+info.Position = UDim2.fromOffset(10, 214)
+info.Size = UDim2.fromOffset(300, 20)
 info.TextXAlignment = Enum.TextXAlignment.Left
 info.TextColor3 = Color3.fromRGB(140, 205, 255)
 info.TextSize = 12
@@ -147,8 +165,8 @@ local listFrame = Instance.new("ScrollingFrame")
 listFrame.Name = "PropList"
 listFrame.BackgroundColor3 = COLORS.list
 listFrame.BorderSizePixel = 0
-listFrame.Position = UDim2.fromOffset(10, 200)
-listFrame.Size = UDim2.fromOffset(290, 200)
+listFrame.Position = UDim2.fromOffset(10, 238)
+listFrame.Size = UDim2.fromOffset(300, 210)
 listFrame.ScrollBarThickness = 4
 listFrame.CanvasSize = UDim2.fromOffset(0, 0)
 listFrame.Parent = main
@@ -162,8 +180,8 @@ local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
 status.Text = "Siap | Scan prop dulu"
-status.Position = UDim2.fromOffset(10, 406)
-status.Size = UDim2.fromOffset(290, 56)
+status.Position = UDim2.fromOffset(10, 454)
+status.Size = UDim2.fromOffset(300, 60)
 status.TextWrapped = true
 status.TextXAlignment = Enum.TextXAlignment.Left
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
@@ -175,11 +193,18 @@ local function setStatus(msg)
     if gui.Parent then status.Text = tostring(msg) end
 end
 
+listen(straightenBtn.MouseButton1Click:Connect(function()
+    straightenEnabled = not straightenEnabled
+    straightenBtn.Text = straightenEnabled and "LURUSKAN: ON" or "LURUSKAN: OFF"
+    straightenBtn.BackgroundColor3 = straightenEnabled and COLORS.blue or COLORS.gray
+    setStatus(straightenEnabled and "Prop diluruskan (rotasi ikut monster)" or "Rotasi asli prop dipertahankan")
+end))
+
 --====================================================
 -- STATE
 --====================================================
 local myProps = {}
-local assignedSlots = {}   -- {prop, remote, part="head|body|armL|armR|legL|legR|aura", index}
+local assignedSlots = {}
 local followRunning = false
 local attackRunning = false
 local followToken = 0
@@ -251,9 +276,7 @@ end
 listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
 
 --====================================================
--- ASSIGN SLOT KE BAGIAN TUBUH
--- Bagian: head(1), body(1), armL(3), armR(3), legL(2), legR(2)
--- Sisa prop -> aura (lingkaran di sekitar badan)
+-- ASSIGN SLOT
 --====================================================
 local function assignSlots()
     assignedSlots = {}
@@ -280,7 +303,6 @@ local function assignSlots()
         for _, slot in ipairs(list) do table.insert(assignedSlots, slot) end
     end
 
-    -- sisa prop -> aura
     local auraIndex = 1
     while myProps[cursor] do
         local data = myProps[cursor]
@@ -302,8 +324,7 @@ listen(scanBtn.MouseButton1Click:Connect(function()
 end))
 
 --====================================================
--- POSISI LOKAL TIAP BAGIAN TUBUH (unit lokal × skala)
--- X = kanan/kiri, Y = atas/bawah, Z = depan/belakang
+-- POSISI LOKAL TIAP BAGIAN TUBUH
 --====================================================
 local function slotLocalPos(slot, scale, phase)
     local p = slot.part
@@ -314,21 +335,19 @@ local function slotLocalPos(slot, scale, phase)
     elseif p == "body" then
         return Vector3.new(0, 5, 0) * scale
     elseif p == "armL" then
-        -- tangan kiri: menjulur ke samping kiri + naik, berayun naik-turun
-        local swing = math.sin(phase) * 0.5
+        local swing = math.sin(phase) * 0.6
         local base = Vector3.new(-3 - i * 1.2, 6 - i * 1.5 + swing, 0)
         return base * scale
     elseif p == "armR" then
-        local swing = math.sin(phase + math.pi) * 0.5
+        local swing = math.sin(phase + math.pi) * 0.6
         local base = Vector3.new(3 + i * 1.2, 6 - i * 1.5 + swing, 0)
         return base * scale
     elseif p == "legL" then
-        -- kaki kiri: lurus ke bawah, i=1 lebih tinggi
-        local swing = math.sin(phase) * 0.3
+        local swing = math.sin(phase) * 0.4
         local base = Vector3.new(-1.8, 3 - i * 1.4, swing)
         return base * scale
     elseif p == "legR" then
-        local swing = math.sin(phase + math.pi) * 0.3
+        local swing = math.sin(phase + math.pi) * 0.4
         local base = Vector3.new(1.8, 3 - i * 1.4, swing)
         return base * scale
     elseif p == "aura" then
@@ -345,7 +364,7 @@ local function slotLocalPos(slot, scale, phase)
 end
 
 --====================================================
--- UPDATE MONSTER
+-- UPDATE MONSTER (v2: rotasi diluruskan)
 --====================================================
 local function updateMonster(centerCF, scale, heightOffset, phase)
     local okCount, errCount = 0, 0
@@ -355,7 +374,21 @@ local function updateMonster(centerCF, scale, heightOffset, phase)
         if obj and obj.Parent and remote and remote.Parent and remote:IsA("RemoteFunction") then
             local localPos = slotLocalPos(slot, scale, phase) + Vector3.new(0, heightOffset, 0)
             local worldPos = centerCF * localPos
-            local goalCF = CFrame.new(worldPos) * centerCF.Rotation
+
+            local goalCF
+            if straightenEnabled then
+                -- LURUSKAN: pakai rotasi monster saja (tegak, menghadap arah sama)
+                goalCF = CFrame.new(worldPos) * centerCF.Rotation
+            else
+                -- pertahankan rotasi asli prop
+                local okRot, origCF = pcall(function() return obj:GetPivot() end)
+                if okRot then
+                    goalCF = CFrame.new(worldPos) * origCF.Rotation
+                else
+                    goalCF = CFrame.new(worldPos) * centerCF.Rotation
+                end
+            end
+
             local ok = pcall(function() remote:InvokeServer(goalCF) end)
             if ok then okCount += 1 else errCount += 1 end
         else
@@ -384,9 +417,9 @@ local function startFollow()
     if #myProps == 0 then setStatus("Scan prop dulu.") return end
     if #assignedSlots == 0 then assignSlots() end
 
-    local scale = math.clamp(tonumber(scaleBox.Text) or 3, 0.5, 20)
-    local distance = math.clamp(tonumber(distBox.Text) or 8, 2, 60)
-    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -10, 40)
+    local scale = math.clamp(tonumber(scaleBox.Text) or 5, 0.5, 50)
+    local distance = math.clamp(tonumber(distBox.Text) or 12, 2, 100)
+    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -20, 80)
 
     attackRunning = false
     attackBtn.Text = "KEJAR TARGET: OFF"
@@ -414,9 +447,8 @@ local function startFollow()
             return
         end
 
-        animPhase += dt * 4 -- kecepatan animasi ayunan
+        animPhase += dt * 4
 
-        -- monster di belakang player, menghadap arah yang sama dengan player
         local back = root.CFrame.LookVector * -distance
         local centerPos = root.Position + back
         local centerCF = CFrame.new(centerPos, centerPos + root.CFrame.LookVector)
@@ -451,9 +483,9 @@ local function startAttack()
     end
     if not target then setStatus("Tidak ada target lain di server.") return end
 
-    local scale = math.clamp(tonumber(scaleBox.Text) or 3, 0.5, 20)
-    local distance = math.clamp(tonumber(distBox.Text) or 8, 2, 60)
-    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -10, 40)
+    local scale = math.clamp(tonumber(scaleBox.Text) or 5, 0.5, 50)
+    local distance = math.clamp(tonumber(distBox.Text) or 12, 2, 100)
+    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -20, 80)
 
     followRunning = false
     followBtn.Text = "FOLLOW SAYA: OFF"
@@ -548,4 +580,4 @@ gui.Destroying:Connect(function()
 end)
 
 setStatus("Siap | Tekan SCAN SEMUA PROP SAYA")
-print("[XLORD Giant Monster | Custom Skeleton] Loaded")
+print("[XLORD Giant Monster v2] Loaded")
