@@ -1,11 +1,3 @@
---====================================================
--- XLORD HUB V24 | BROOKHAVEN RP sekali
--- V24:
---   * XYZ toggle tunggal di header (tombol mengambang dihapus)
---   * Bersihkan ScreenGui XLORD lama saat load
---   * Panel MUSIK baru (ID manual, dropdown 43 audio meme,
---     PUTAR, ULANGI loop, AUDIO MELEDAK KE SEMUA)
---====================================================
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
