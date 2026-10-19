@@ -3,8 +3,7 @@
 -- V24:
 --   * XYZ toggle tunggal di header (tombol mengambang dihapus)
 --   * Bersihkan ScreenGui XLORD lama saat load
---   * Panel MUSIK baru (ID manual, dropdown 43 audio meme,
---     PUTAR, ULANGI loop, AUDIO MELEDAK KE SEMUA)
+--   * Panel MUSIK DIHAPUS (sesuai permintaan)
 --====================================================
 
 local Players = game:GetService("Players")
@@ -151,9 +150,6 @@ local propModeButton = button(main, "PropMode", "PROP", COLORS.purple)
 local xyzButton = button(main, "XYZToggle", "XYZ", COLORS.blue)
 local antiSitButton = button(main, "AntiSitToggle", "AS", COLORS.green)
 antiSitButton.Visible = false
-
--- Tombol MUSIK baru di header
-local musicButton = button(main, "MusicMode", "MUSIK", Color3.fromRGB(155, 55, 145))
 
 local floating = button(gui, "FloatingXL", "XL", COLORS.blue)
 floating.Size = UDim2.fromOffset(44, 44)
@@ -403,7 +399,6 @@ local function applySize(newWidth, newHeight)
     propModeButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
     xyzButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
     antiSitButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
-    musicButton.Size = UDim2.fromOffset(sizeBtn + 14, sizeBtn)
 
     -- Dari kanan ke kiri
     close.Position = UDim2.fromOffset(width - 42, 6)
@@ -412,8 +407,7 @@ local function applySize(newWidth, newHeight)
     smaller.Position = UDim2.fromOffset(width - 144, 6)
     antiSitButton.Position = UDim2.fromOffset(width - 178, 6)
     xyzButton.Position = UDim2.fromOffset(width - 212, 6)
-    musicButton.Position = UDim2.fromOffset(width - 276, 6)
-    propModeButton.Position = UDim2.fromOffset(width - 310, 6)
+    propModeButton.Position = UDim2.fromOffset(width - 246, 6)
 
     antiSitButton.Visible = true
 
@@ -1556,355 +1550,6 @@ end)
 notify("Siap | Spawn prop lalu SCAN PROP")
 
 --====================================================
--- PANEL MUSIK (BARU)
---====================================================
--- Daftar audio dari script GTVZ pertama (43 audio meme)
-local MUSIC_LIST = {
-    {Name = "Yamete Kudasai", ID = 108494476595033},
-    {Name = "Gritinho", ID = 5710016194},
-    {Name = "Jumpscare Horroroso", ID = 85435253347146},
-    {Name = "Audio Alto", ID = 6855150757},
-    {Name = "Ruido", ID = 120034877160791},
-    {Name = "Jumpscare 2", ID = 110637995610528},
-    {Name = "Risada Da Bruxa Minecraft", ID = 116214940486087},
-    {Name = "The Boiled One", ID = 137177653817621},
-    {Name = "Deitei Um Ave Maria Doido", ID = 128669424001766},
-    {Name = "Mandrake Detected", ID = 9068077052},
-    {Name = "Aaaaaaaaa", ID = 80156405968805},
-    {Name = "AAAHHHH", ID = 9084006093},
-    {Name = "amongus", ID = 6651571134},
-    {Name = "Sus", ID = 6701126635},
-    {Name = "Gritao AAAAAAAAA", ID = 5853668794},
-    {Name = "UHHHHH COFFCOFF", ID = 7056720271},
-    {Name = "SUS", ID = 7153419575},
-    {Name = "Sonic.exe", ID = 2496367477},
-    {Name = "Tubers93 1", ID = 270145703},
-    {Name = "Tubers93 2", ID = 18131809532},
-    {Name = "John's Laugh", ID = 130759239},
-    {Name = "Nao sei KKKK", ID = 6549021381},
-    {Name = "Grito", ID = 80156405968805},
-    {Name = "audio estranho", ID = 7705506391},
-    {Name = "AAAH", ID = 7772283448},
-    {Name = "Gay, gay", ID = 18786647417},
-    {Name = "Bat Hit", ID = 7129073354},
-    {Name = "Nuclear Siren", ID = 675587093},
-    {Name = "Sem ideia de nome KK", ID = 7520729342},
-    {Name = "Grito 2", ID = 91412024101709},
-    {Name = "Estora timpano", ID = 268116333},
-    {Name = "[ Content Deleted ]", ID = 106835463235574},
-    {Name = "Toma Jack", ID = 132603645477541},
-    {Name = "Pede ifood pede", ID = 133843750864059},
-    {Name = "I Ghost The down", ID = 84663543883498},
-    {Name = "Compre OnLine Na shoope", ID = 8747441609},
-    {Name = "Uh Que Nojo", ID = 103440368630269},
-    {Name = "Sai dai Lava Prato", ID = 101232400175829},
-    {Name = "Seloko num compensa", ID = 78442476709262},
-    {Name = "(EM BREVE)  FUNK", ID = 124348034550602},
-    {Name = "Candyland - Tobu", ID = 118939739460633},
-    {Name = "Meme do Dom pollo What the hell", ID = 100656590080703},
-    {Name = "nao to entendendo nd meme estourado", ID = 7962533987},
-}
-
-local musicPanel = Instance.new("Frame")
-musicPanel.Name = "MusicPanel"
-musicPanel.Size = UDim2.new(1, -20, 1, -52)
-musicPanel.Position = UDim2.fromOffset(10, 44)
-musicPanel.BackgroundColor3 = COLORS.panel
-musicPanel.BackgroundTransparency = 0.08
-musicPanel.BorderSizePixel = 0
-musicPanel.Visible = false
-musicPanel.ZIndex = 10
-musicPanel.Parent = main
-round(musicPanel, 9)
-
-local musicTitle = Instance.new("TextLabel")
-musicTitle.Size = UDim2.new(1, -20, 0, 26)
-musicTitle.Position = UDim2.fromOffset(10, 5)
-musicTitle.BackgroundTransparency = 1
-musicTitle.Text = "PANEL MUSIK | TROLL AUDIO"
-musicTitle.TextColor3 = Color3.new(1,1,1)
-musicTitle.TextSize = 13
-musicTitle.Font = Enum.Font.GothamBold
-musicTitle.TextXAlignment = Enum.TextXAlignment.Left
-musicTitle.ZIndex = 11
-musicTitle.Parent = musicPanel
-
-local function musicMake(class, name, caption, y, h, color)
-    local obj = Instance.new(class)
-    obj.Name = name
-    obj.Size = UDim2.new(1, -20, 0, h)
-    obj.Position = UDim2.fromOffset(10, y)
-    obj.BackgroundColor3 = color or COLORS.field
-    obj.BorderSizePixel = 0
-    obj.Text = caption
-    obj.TextColor3 = Color3.new(1,1,1)
-    obj.TextSize = 12
-    obj.Font = Enum.Font.GothamBold
-    obj.ZIndex = 11
-    obj.Parent = musicPanel
-    if class == "TextLabel" then
-        obj.BackgroundTransparency = 1
-        obj.TextXAlignment = Enum.TextXAlignment.Left
-    else
-        round(obj, 7)
-    end
-    return obj
-end
-
-local musicIdBox = musicMake("TextBox", "MusicID", "", 34, 30, COLORS.field)
-musicIdBox.PlaceholderText = "Input ID audio / musik (angka saja)"
-musicIdBox.ClearTextOnFocus = false
-musicIdBox.TextSize = 12
-musicIdBox.Font = Enum.Font.Gotham
-
-local musicPickBtn = musicMake("TextButton", "MusicPick", "PILIH DARI DAFTAR (43 AUDIO)", 70, 30, COLORS.purple)
-local musicSelectedLabel = musicMake("TextLabel", "MusicSelected", "Dipilih: (belum)", 104, 20)
-musicSelectedLabel.TextSize = 11
-musicSelectedLabel.TextColor3 = Color3.fromRGB(180, 220, 255)
-
-local musicPlayBtn = musicMake("TextButton", "MusicPlay", "PUTAR AUDIO", 130, 34, COLORS.green)
-
-local musicLoopToggle = musicMake("TextButton", "MusicLoop", "ULANGI: OFF", 170, 30, COLORS.gray)
-local musicSpamToggle = musicMake("TextButton", "MusicSpam", "AUDIO MELEDAK KE SEMUA: OFF", 206, 32, COLORS.gray)
-
-local musicStatusLabel = musicMake("TextLabel", "MusicStatus", "Status: Siap", 244, 26)
-musicStatusLabel.TextSize = 11
-musicStatusLabel.TextWrapped = true
-musicStatusLabel.TextColor3 = Color3.fromRGB(190, 194, 207)
-
--- Scrolling list untuk pilih audio
-local musicListFrame = Instance.new("ScrollingFrame")
-musicListFrame.Name = "MusicList"
-musicListFrame.Size = UDim2.new(1, -20, 1, -52 - 40)
-musicListFrame.Position = UDim2.fromOffset(10, 34)
-musicListFrame.BackgroundColor3 = COLORS.list
-musicListFrame.BackgroundTransparency = 0.03
-musicListFrame.BorderSizePixel = 0
-musicListFrame.ScrollBarThickness = 4
-musicListFrame.CanvasSize = UDim2.fromOffset(0, 0)
-musicListFrame.Visible = false
-musicListFrame.ZIndex = 20
-musicListFrame.Parent = musicPanel
-round(musicListFrame, 8)
-
-local musicListLayout = Instance.new("UIListLayout")
-musicListLayout.Padding = UDim.new(0, 4)
-musicListLayout.Parent = musicListFrame
-
-local function musicNotify(msg)
-    if gui.Parent then musicStatusLabel.Text = "Status: " .. tostring(msg) end
-end
-
--- State
-local selectedAudioID = nil
-local selectedAudioName = nil
-local musicLoopEnabled = false
-local musicSpamEnabled = false
-local loopThreadToken = 0
-local localSound = nil
-
-local function stopLocalSound()
-    if localSound and localSound.Parent then
-        pcall(function() localSound:Stop(); localSound:Destroy() end)
-    end
-    localSound = nil
-end
-
-local function buildMusicList()
-    for _, child in ipairs(musicListFrame:GetChildren()) do
-        if child:IsA("TextButton") then child:Destroy() end
-    end
-    for i, audio in ipairs(MUSIC_LIST) do
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -8, 0, 32)
-        btn.LayoutOrder = i
-        btn.BackgroundColor3 = Color3.fromRGB(58, 64, 85)
-        btn.Text = audio.Name
-        btn.TextSize = 11
-        btn.TextColor3 = Color3.new(1, 1, 1)
-        btn.Font = Enum.Font.Gotham
-        btn.TextXAlignment = Enum.TextXAlignment.Left
-        btn.TextTruncate = Enum.TextTruncate.AtEnd
-        btn.ZIndex = 21
-        btn.Parent = musicListFrame
-        btn.MouseButton1Click:Connect(function()
-            selectedAudioID = audio.ID
-            selectedAudioName = audio.Name
-            musicIdBox.Text = tostring(audio.ID)
-            musicSelectedLabel.Text = "Dipilih: " .. audio.Name .. " (ID " .. audio.ID .. ")"
-            musicListFrame.Visible = false
-            musicNotify("Audio dipilih: " .. audio.Name)
-        end)
-    end
-    musicListFrame.CanvasSize = UDim2.fromOffset(0, #MUSIC_LIST * 36 + 8)
-end
-buildMusicList()
-
--- Update selectedAudioID dari textbox manual
-listen(musicIdBox:GetPropertyChangedSignal("Text"):Connect(function()
-    local num = tonumber(musicIdBox.Text)
-    if num then
-        selectedAudioID = num
-        selectedAudioName = "Manual (" .. num .. ")"
-        musicSelectedLabel.Text = "Dipilih: ID " .. num
-    end
-end))
-
-listen(musicPickBtn.MouseButton1Click:Connect(function()
-    musicListFrame.Visible = not musicListFrame.Visible
-    musicNotify(musicListFrame.Visible and "Pilih audio dari daftar" or "Daftar ditutup")
-end))
-
--- Fungsi helper remote & client sound
-local function fireServerAudio(workspaceOrNil, id)
-    local re = ReplicatedStorage:FindFirstChild("RE")
-    local remote = re and re:FindFirstChild("1Gu1nSound1s")
-    if remote then
-        pcall(function()
-            remote:FireServer(workspaceOrNil or workspace, id, 1)
-        end)
-        return true
-    end
-    return false
-end
-
-local function playClientSound(id)
-    local char = localPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://" .. tostring(id)
-    sound.Volume = 1
-    sound.Parent = root
-    sound:Play()
-    task.delay(10, function()
-        pcall(function()
-            if sound.Parent then sound:Destroy() end
-        end)
-    end)
-end
-
-local function playAudioOnce(id, alsoClient)
-    if not id then musicNotify("ID audio belum diisi"); return end
-    local ok = fireServerAudio(workspace, id)
-    if alsoClient ~= false then playClientSound(id) end
-    musicNotify((ok and "Server audio OK" or "Remote tidak ada, client-only") .. " | ID " .. tostring(id))
-end
-
-local function startMusicLoop()
-    musicLoopEnabled = true
-    loopThreadToken = loopThreadToken + 1
-    local myToken = loopThreadToken
-    musicLoopToggle.Text = "ULANGI: ON"
-    musicLoopToggle.BackgroundColor3 = COLORS.green
-    task.spawn(function()
-        while musicLoopEnabled and loopThreadToken == myToken and gui.Parent do
-            if selectedAudioID then
-                playAudioOnce(selectedAudioID, true)
-            end
-            task.wait(0.8)
-        end
-        if loopThreadToken == myToken then
-            musicLoopEnabled = false
-            musicLoopToggle.Text = "ULANGI: OFF"
-            musicLoopToggle.BackgroundColor3 = COLORS.gray
-        end
-    end)
-end
-
-local function stopMusicLoop()
-    musicLoopEnabled = false
-    loopThreadToken = loopThreadToken + 1
-    musicLoopToggle.Text = "ULANGI: OFF"
-    musicLoopToggle.BackgroundColor3 = COLORS.gray
-    stopLocalSound()
-    musicNotify("Loop audio dihentikan")
-end
-
-listen(musicLoopToggle.MouseButton1Click:Connect(function()
-    if musicLoopEnabled then stopMusicLoop() else startMusicLoop() end
-end))
-
--- AUDIO MELEDAK KE SEMUA (spam)
-local spamThread = nil
-local SPAM_ID_DEFAULT = 6314880174
-
-local function stopSpam()
-    musicSpamEnabled = false
-    musicSpamToggle.Text = "AUDIO MELEDAK KE SEMUA: OFF"
-    musicSpamToggle.BackgroundColor3 = COLORS.gray
-    if spamThread then
-        pcall(function() task.cancel(spamThread) end)
-        spamThread = nil
-    end
-    stopLocalSound()
-    musicNotify("Spam audio dihentikan")
-end
-
-local function startSpam()
-    musicSpamEnabled = true
-    musicSpamToggle.Text = "AUDIO MELEDAK KE SEMUA: ON"
-    musicSpamToggle.BackgroundColor3 = COLORS.green
-    local id = selectedAudioID or SPAM_ID_DEFAULT
-    musicNotify("Spam audio ON | ID " .. tostring(id))
-    spamThread = task.spawn(function()
-        while musicSpamEnabled and gui.Parent do
-            fireServerAudio(workspace, id)
-            -- client-side juga
-            local char = localPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            if root then
-                local s = Instance.new("Sound")
-                s.SoundId = "rbxassetid://" .. tostring(id)
-                s.Volume = 1
-                s.Parent = root
-                s:Play()
-                task.delay(1, function() pcall(function() if s.Parent then s:Destroy() end end) end)
-            end
-            task.wait(0.03)
-        end
-    end)
-end
-
-listen(musicSpamToggle.MouseButton1Click:Connect(function()
-    if musicSpamEnabled then stopSpam() else startSpam() end
-end))
-
-listen(musicPlayBtn.MouseButton1Click:Connect(function()
-    if not selectedAudioID then
-        -- fallback ke ID default spam
-        selectedAudioID = SPAM_ID_DEFAULT
-        musicIdBox.Text = tostring(SPAM_ID_DEFAULT)
-        musicSelectedLabel.Text = "Dipilih: ID " .. SPAM_ID_DEFAULT
-    end
-    playAudioOnce(selectedAudioID, true)
-end))
-
--- Tombol MUSIK di header: buka/tutup panel musik
-listen(musicButton.MouseButton1Click:Connect(function()
-    musicPanel.Visible = not musicPanel.Visible
-    musicButton.Text = musicPanel.Visible and "TUTUP" or "MUSIK"
-    musicButton.BackgroundColor3 = musicPanel.Visible and COLORS.red or Color3.fromRGB(155, 55, 145)
-    if musicPanel.Visible then
-        -- Sembunyikan panel prop kalau terbuka
-        if propPanel.Visible then
-            propPanel.Visible = false
-            propModeButton.Text = "PROP"
-        end
-        musicNotify("Panel musik terbuka")
-    end
-end))
-
--- Kalau PROP dibuka, tutup MUSIK
-listen(propModeButton.MouseButton1Click:Connect(function()
-    if musicPanel.Visible then
-        musicPanel.Visible = false
-        musicButton.Text = "MUSIK"
-        musicButton.BackgroundColor3 = Color3.fromRGB(155, 55, 145)
-    end
-end))
-
---====================================================
 -- CLEANUP
 --====================================================
 gui.Destroying:Connect(function()
@@ -1914,9 +1559,6 @@ gui.Destroying:Connect(function()
     setAntiSit(false)
     if pullRunning then stopPull(nil) end
     if lookEnabled then stopLook(nil) end
-    if musicLoopEnabled then stopMusicLoop() end
-    if musicSpamEnabled then stopSpam() end
-    stopLocalSound()
     for _, connection in ipairs(propConnections) do
         pcall(function() connection:Disconnect() end)
     end
@@ -1930,4 +1572,4 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V24] Loaded: Auto Sofa, Teleport, TARIK, LIHAT, MUSIK panel, trampoline TEST, XYZ tunggal di header, resize, minimize")
+print("[XLORD V24] Loaded: Auto Sofa, Teleport, TARIK, LIHAT, trampoline TEST, XYZ tunggal di header, resize, minimize")
