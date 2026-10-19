@@ -1,11 +1,3 @@
---====================================================
--- XLORD GIANT MONSTER | CUSTOM SKELETON
--- Skeleton: kepala 1, badan 1, tangan kiri 3, tangan kanan 3,
--- kaki kiri 2, kaki kanan 2. Total 9 slot utama.
--- Prop ekstra -> aura di sekitar badan.
--- Monster mengikuti gerakan kamu (termasuk tangan ikut ayun
--- mengikuti arah hadap / gerakan kamu).
---====================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
