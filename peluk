@@ -1,0 +1,715 @@
+--====================================================
+-- XLORD HUG ANIMATION
+-- Animasi peluk untuk karakter lokal (R6 / R15).
+-- Tekan tombol untuk memulai animasi peluk ~2 detik.
+--====================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+for _, child in ipairs(playerGui:GetChildren()) do
+    if child:IsA("ScreenGui") and child.Name:find("XLORD_HugAnim") then
+        child:Destroy()
+    end
+end
+
+local connections = {}
+local function listen(conn) table.insert(connections, conn); return conn end
+
+--====================================================
+-- GUI
+--====================================================
+local COLORS = {
+    panel = Color3.fromRGB(25, 27, 38),
+    red   = Color3.fromRGB(205, 55, 65),
+    pink  = Color3.fromRGB(220, 90, 140),
+    green = Color3.fromRGB(42, 143, 100),
+}
+
+local function round(obj, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 8)
+    c.Parent = obj
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "XLORD_HugAnim"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 999
+gui.Parent = playerGui
+
+local main = Instance.new("Frame")
+main.Position = UDim2.fromOffset(20, 500)
+main.Size = UDim2.fromOffset(200, 100)
+main.BackgroundColor3 = COLORS.panel
+main.BackgroundTransparency = 0.1
+main.BorderSizePixel = 0
+main.Active = true
+main.Parent = gui
+round(main, 12)
+
+local title = Instance.new("TextLabel")
+title.BackgroundTransparency = 1
+title.Text = "HUG ANIMATION"
+title.Position = UDim2.fromOffset(10, 4)
+title.Size = UDim2.fromOffset(180, 20)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = Color3.new(1, 1, 1)
+title.TextSize = 12
+title.Font = Enum.Font.GothamBold
+title.Parent = main
+
+local hugBtn = Instance.new("TextButton")
+hugBtn.BackgroundColor3 = COLORS.pink
+hugBtn.BorderSizePixel = 0
+hugBtn.Text = "PELUK!"
+hugBtn.Position = UDim2.fromOffset(10, 30)
+hugBtn.Size = UDim2.fromOffset(180, 40)
+hugBtn.TextColor3 = Color3.new(1, 1, 1)
+hugBtn.TextSize = 14
+hugBtn.Font = Enum.Font.GothamBold
+hugBtn.Parent = main
+round(hugBtn, 8)
+
+local stopBtn = Instance.new("TextButton")
+stopBtn.BackgroundColor3 = COLORS.red
+stopBtn.BorderSizePixel = 0
+stopBtn.Text = "STOP"
+stopBtn.Position = UDim2.fromOffset(10, 72)
+stopBtn.Size = UDim2.fromOffset(85, 22)
+stopBtn.TextColor3 = Color3.new(1, 1, 1)
+stopBtn.TextSize = 11
+stopBtn.Font = Enum.Font.GothamBold
+stopBtn.Parent = main
+round(stopBtn, 6)
+
+local resetBtn = Instance.new("TextButton")
+resetBtn.BackgroundColor3 = COLORS.green
+resetBtn.BorderSizePixel = 0
+resetBtn.Text = "RESET POSE"
+resetBtn.Position = UDim2.fromOffset(105, 72)
+resetBtn.Size = UDim2.fromOffset(85, 22)
+resetBtn.TextColor3 = Color3.new(1, 1, 1)
+resetBtn.TextSize = 11
+resetBtn.Font = Enum.Font.GothamBold
+resetBtn.Parent = main
+round(resetBtn, 6)
+
+--====================================================
+-- MOTOR6D HELPER
+-- Menyimpan nilai asli Motor6D supaya bisa di-reset.
+--====================================================
+local origMotors = {}
+
+local function grabMotor(char, motorName)
+    local torso = char:FindFirstChild("Torso")
+        or char:FindFirstChild("UpperTorso")
+        or char:FindFirstChild("LowerTorso")
+    local motor = torso and torso:FindFirstChild(motorName)
+    if motor and motor:IsA("Motor6D") then
+        if not origMotors[motor] then
+            origMotors[motor] = {
+                C0 = motor.C0,
+                C1 = motor.C1,
+                Transform = motor.Transform,
+            }
+        end
+        return motor
+    end
+    return nil
+end
+
+local function resetAllMotors()
+    for motor, data in pairs(origMotors) do
+        if motor and motor.Parent then
+            motor.C0 = data.C0
+            motor.C1 = data.C1
+            motor.Transform = data.Transform
+        end
+    end
+    origMotors = {}
+end
+
+--====================================================
+-- ANIMASI PELUK
+-- Pose target (radian):
+--   RightShoulder : lengan kiri/kanan terangkat & menutup ke depan
+--   LeftShoulder  : sama, sisi sebaliknya
+--   Neck          : kepala agak menunduk sedikit
+--   Waist         : badan agak membungkuk ke depan
+-- Lalu TweenService menginterpolasi ke pose itu (open -> close).
+--====================================================
+local function getCharacterMotors(char)
+    local torso = char:FindFirstChild("Torso")
+        or char:FindFirstChild("UpperTorso")
+    if not torso then return nil end
+
+    return {
+        rightShoulder = torso:FindFirstChild("RightShoulder"),
+        leftShoulder  = torso:FindFirstChild("LeftShoulder"),
+        neck          = torso:FindFirstChild("Neck"),
+        waist         = char:FindFirstChild("UpperTorso")
+                        and char.UpperTorso:FindFirstChild("Waist")
+                        or torso:FindFirstChild("Waist"),
+    }
+end
+
+-- Konversi rotasi sederhana ke CFrame target relatif terhadap C0 asli
+local function makeHugPose()
+    return {
+        rightShoulder = CFrame.Angles(0, math.rad(-75), math.rad(-40)),
+        leftShoulder  = CFrame.Angles(0, math.rad(75),  math.rad(40)),
+        neck          = CFrame.Angles(math.rad(15), 0, 0),
+        waist         = CFrame.Angles(math.rad(8), 0, 0),
+    }
+end
+
+local function makeOpenPose()
+    return {
+        rightShoulder = CFrame.Angles(0, math.rad(-20), math.rad(-70)),
+        leftShoulder  = CFrame.Angles(0, math.rad(20),  math.rad(70)),
+        neck          = CFrame.Angles(math.rad(-5), 0, 0),
+        waist         = CFrame.Angles(0, 0, 0),
+    }
+end
+
+local function tweenMotor(motor, targetCF, duration)
+    if not motor or not motor.Parent then return end
+    local orig = origMotors[motor]
+    if not orig then return end
+    local goalC0 = orig.C0 * targetCF
+    local tw = TweenService:Create(
+        motor,
+        TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        { C0 = goalC0 }
+    )
+    tw:Play()
+    return tw
+end
+
+local hugging = false
+local hugToken = 0
+
+local function playHug()
+    if hugging then return end
+    local char = localPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+
+    -- simpan orientasi awal & matikan kontrol gerak
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local startCFrame = root.CFrame
+    local wasPlatform = humanoid.PlatformStand
+    humanoid.PlatformStand = true
+
+    hugging = true
+    hugToken += 1
+    local myToken = hugToken
+
+    -- ambil motor & simpan nilai aslinya
+    local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+    local motors = {
+        rs = grabMotor(char, "RightShoulder"),
+        ls = grabMotor(char, "LeftShoulder"),
+        neck = grabMotor(char, "Neck"),
+        waist = grabMotor(char, "Waist"),
+    }
+    if not motors.rs or not motors.ls then
+        setStatusSafe("Karakter bukan R6/R15 standar.")
+        humanoid.PlatformStand = wasPlatform
+        hugging = false
+        return
+    end
+
+    -- tahap 1: buka tangan (0.35s)
+    local open = makeOpenPose()
+    tweenMotor(motors.rs, open.rightShoulder, 0.35)
+    tweenMotor(motors.ls, open.leftShoulder, 0.35)
+    tweenMotor(motors.neck, open.neck, 0.35)
+    tweenMotor(motors.waist, open.waist, 0.35)
+
+    task.wait(0.4)
+    if not hugging or hugToken ~= myToken then
+        humanoid.PlatformStand = wasPlatform
+        return
+    end
+
+    -- tahap 2: tutup tangan (memeluk) (0.45s)
+    local hug = makeHugPose()
+    local tws = {
+        tweenMotor(motors.rs, hug.rightShoulder, 0.45),
+        tweenMotor(motors.ls, hug.leftShoulder, 0.45),
+        tweenMotor(motors.neck, hug.neck, 0.45),
+        tweenMotor(motors.waist, hug.waist, 0.45),
+    }
+
+    -- tunggu selesai
+    task.wait(0.5)
+    if not hugging or hugToken ~= myToken then
+        humanoid.PlatformStand = wasPlatform
+        return
+    end
+
+    -- tahan pose peluk ~1.5 detik
+    task.wait(1.5)
+    if not hugging or hugToken ~= myToken then
+        humanoid.PlatformStand = wasPlatform
+        return
+    end
+
+    -- tahap 3: kembali ke pose normal (0.5s)
+    local resetPose = {
+        rightShoulder = CFrame.new(),
+        leftShoulder  = CFrame.new(),
+        neck          = CFrame.new(),
+        waist         = CFrame.new(),
+    }
+    tweenMotor(motors.rs, resetPose.rightShoulder, 0.5)
+    tweenMotor(motors.ls, resetPose.leftShoulder, 0.5)
+    tweenMotor(motors.neck, resetPose.neck, 0.5)
+    tweenMotor(motors.waist, resetPose.waist, 0.5)
+
+    task.wait(0.6)
+    humanoid.PlatformStand = wasPlatform
+    hugging = false
+    -- kembalikan posisi karakter agar tidak bergeser
+    if root and root.Parent then
+        root.CFrame = startCFrame
+    end
+    resetAllMotors()
+end
+
+-- helper status yang aman dari gui hilang
+local statusLabel
+local function setStatusSafe(msg)
+    if statusLabel and statusLabel.Parent then
+        statusLabel.Text = tostring(msg)
+    end
+end
+
+-- status label bawah tombol (kita tambahkan setelah semua deklarasi)
+statusLabel = Instance.new("TextLabel")
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Tekan PELUK!"
+statusLabel.Position = UDim2.fromOffset(10, 96)
+statusLabel.Size = UDim2.fromOffset(180, 40)
+statusLabel.TextWrapped = true
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.TextColor3 = Color3.fromRGB(190, 194, 207)
+statusLabel.TextSize = 10
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = main
+
+-- perbesar panel karena ada status
+main.Size = UDim2.fromOffset(200, 140)
+
+--====================================================
+-- TOMBOL
+--====================================================
+listen(hugBtn.MouseButton1Click:Connect(function()
+    if hugging then return end
+    task.spawn(playHug)
+end))
+
+listen(stopBtn.MouseButton1Click:Connect(function()
+    hugging = false
+    hugToken += 1
+    local char = localPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid.PlatformStand = false end
+    resetAllMotors()
+    setStatusSafe("Dihentikan.")
+end))
+
+listen(resetBtn.MouseButton1Click:Connect(function()
+    hugging = false
+    hugToken += 1
+    local char = localPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid.PlatformStand = false end
+    resetAllMotors()
+    setStatusSafe("Pose di-reset.")
+end))
+
+--====================================================
+-- CLEANUP
+--====================================================
+gui.Destroying:Connect(function()
+    hugging = false
+    hugToken += 1
+    local char = localPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid.PlatformStand = false end
+    resetAllMotors()
+    for _, c in ipairs(connections) do
+        if c.Connected then c:Disconnect() end
+    end
+    table.clear(connections)
+end)
+
+print("[XLORD Hug Animation] Loaded")--====================================================
+-- XLORD HUG ANIMATION
+-- Animasi peluk untuk karakter lokal (R6 / R15).
+-- Tekan tombol untuk memulai animasi peluk ~2 detik.
+--====================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+for _, child in ipairs(playerGui:GetChildren()) do
+    if child:IsA("ScreenGui") and child.Name:find("XLORD_HugAnim") then
+        child:Destroy()
+    end
+end
+
+local connections = {}
+local function listen(conn) table.insert(connections, conn); return conn end
+
+--====================================================
+-- GUI
+--====================================================
+local COLORS = {
+    panel = Color3.fromRGB(25, 27, 38),
+    red   = Color3.fromRGB(205, 55, 65),
+    pink  = Color3.fromRGB(220, 90, 140),
+    green = Color3.fromRGB(42, 143, 100),
+}
+
+local function round(obj, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 8)
+    c.Parent = obj
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "XLORD_HugAnim"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 999
+gui.Parent = playerGui
+
+local main = Instance.new("Frame")
+main.Position = UDim2.fromOffset(20, 500)
+main.Size = UDim2.fromOffset(200, 100)
+main.BackgroundColor3 = COLORS.panel
+main.BackgroundTransparency = 0.1
+main.BorderSizePixel = 0
+main.Active = true
+main.Parent = gui
+round(main, 12)
+
+local title = Instance.new("TextLabel")
+title.BackgroundTransparency = 1
+title.Text = "HUG ANIMATION"
+title.Position = UDim2.fromOffset(10, 4)
+title.Size = UDim2.fromOffset(180, 20)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = Color3.new(1, 1, 1)
+title.TextSize = 12
+title.Font = Enum.Font.GothamBold
+title.Parent = main
+
+local hugBtn = Instance.new("TextButton")
+hugBtn.BackgroundColor3 = COLORS.pink
+hugBtn.BorderSizePixel = 0
+hugBtn.Text = "PELUK!"
+hugBtn.Position = UDim2.fromOffset(10, 30)
+hugBtn.Size = UDim2.fromOffset(180, 40)
+hugBtn.TextColor3 = Color3.new(1, 1, 1)
+hugBtn.TextSize = 14
+hugBtn.Font = Enum.Font.GothamBold
+hugBtn.Parent = main
+round(hugBtn, 8)
+
+local stopBtn = Instance.new("TextButton")
+stopBtn.BackgroundColor3 = COLORS.red
+stopBtn.BorderSizePixel = 0
+stopBtn.Text = "STOP"
+stopBtn.Position = UDim2.fromOffset(10, 72)
+stopBtn.Size = UDim2.fromOffset(85, 22)
+stopBtn.TextColor3 = Color3.new(1, 1, 1)
+stopBtn.TextSize = 11
+stopBtn.Font = Enum.Font.GothamBold
+stopBtn.Parent = main
+round(stopBtn, 6)
+
+local resetBtn = Instance.new("TextButton")
+resetBtn.BackgroundColor3 = COLORS.green
+resetBtn.BorderSizePixel = 0
+resetBtn.Text = "RESET POSE"
+resetBtn.Position = UDim2.fromOffset(105, 72)
+resetBtn.Size = UDim2.fromOffset(85, 22)
+resetBtn.TextColor3 = Color3.new(1, 1, 1)
+resetBtn.TextSize = 11
+resetBtn.Font = Enum.Font.GothamBold
+resetBtn.Parent = main
+round(resetBtn, 6)
+
+--====================================================
+-- MOTOR6D HELPER
+-- Menyimpan nilai asli Motor6D supaya bisa di-reset.
+--====================================================
+local origMotors = {}
+
+local function grabMotor(char, motorName)
+    local torso = char:FindFirstChild("Torso")
+        or char:FindFirstChild("UpperTorso")
+        or char:FindFirstChild("LowerTorso")
+    local motor = torso and torso:FindFirstChild(motorName)
+    if motor and motor:IsA("Motor6D") then
+        if not origMotors[motor] then
+            origMotors[motor] = {
+                C0 = motor.C0,
+                C1 = motor.C1,
+                Transform = motor.Transform,
+            }
+        end
+        return motor
+    end
+    return nil
+end
+
+local function resetAllMotors()
+    for motor, data in pairs(origMotors) do
+        if motor and motor.Parent then
+            motor.C0 = data.C0
+            motor.C1 = data.C1
+            motor.Transform = data.Transform
+        end
+    end
+    origMotors = {}
+end
+
+--====================================================
+-- ANIMASI PELUK
+-- Pose target (radian):
+--   RightShoulder : lengan kiri/kanan terangkat & menutup ke depan
+--   LeftShoulder  : sama, sisi sebaliknya
+--   Neck          : kepala agak menunduk sedikit
+--   Waist         : badan agak membungkuk ke depan
+-- Lalu TweenService menginterpolasi ke pose itu (open -> close).
+--====================================================
+local function getCharacterMotors(char)
+    local torso = char:FindFirstChild("Torso")
+        or char:FindFirstChild("UpperTorso")
+    if not torso then return nil end
+
+    return {
+        rightShoulder = torso:FindFirstChild("RightShoulder"),
+        leftShoulder  = torso:FindFirstChild("LeftShoulder"),
+        neck          = torso:FindFirstChild("Neck"),
+        waist         = char:FindFirstChild("UpperTorso")
+                        and char.UpperTorso:FindFirstChild("Waist")
+                        or torso:FindFirstChild("Waist"),
+    }
+end
+
+-- Konversi rotasi sederhana ke CFrame target relatif terhadap C0 asli
+local function makeHugPose()
+    return {
+        rightShoulder = CFrame.Angles(0, math.rad(-75), math.rad(-40)),
+        leftShoulder  = CFrame.Angles(0, math.rad(75),  math.rad(40)),
+        neck          = CFrame.Angles(math.rad(15), 0, 0),
+        waist         = CFrame.Angles(math.rad(8), 0, 0),
+    }
+end
+
+local function makeOpenPose()
+    return {
+        rightShoulder = CFrame.Angles(0, math.rad(-20), math.rad(-70)),
+        leftShoulder  = CFrame.Angles(0, math.rad(20),  math.rad(70)),
+        neck          = CFrame.Angles(math.rad(-5), 0, 0),
+        waist         = CFrame.Angles(0, 0, 0),
+    }
+end
+
+local function tweenMotor(motor, targetCF, duration)
+    if not motor or not motor.Parent then return end
+    local orig = origMotors[motor]
+    if not orig then return end
+    local goalC0 = orig.C0 * targetCF
+    local tw = TweenService:Create(
+        motor,
+        TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        { C0 = goalC0 }
+    )
+    tw:Play()
+    return tw
+end
+
+local hugging = false
+local hugToken = 0
+
+local function playHug()
+    if hugging then return end
+    local char = localPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+
+    -- simpan orientasi awal & matikan kontrol gerak
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local startCFrame = root.CFrame
+    local wasPlatform = humanoid.PlatformStand
+    humanoid.PlatformStand = true
+
+    hugging = true
+    hugToken += 1
+    local myToken = hugToken
+
+    -- ambil motor & simpan nilai aslinya
+    local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+    local motors = {
+        rs = grabMotor(char, "RightShoulder"),
+        ls = grabMotor(char, "LeftShoulder"),
+        neck = grabMotor(char, "Neck"),
+        waist = grabMotor(char, "Waist"),
+    }
+    if not motors.rs or not motors.ls then
+        setStatusSafe("Karakter bukan R6/R15 standar.")
+        humanoid.PlatformStand = wasPlatform
+        hugging = false
+        return
+    end
+
+    -- tahap 1: buka tangan (0.35s)
+    local open = makeOpenPose()
+    tweenMotor(motors.rs, open.rightShoulder, 0.35)
+    tweenMotor(motors.ls, open.leftShoulder, 0.35)
+    tweenMotor(motors.neck, open.neck, 0.35)
+    tweenMotor(motors.waist, open.waist, 0.35)
+
+    task.wait(0.4)
+    if not hugging or hugToken ~= myToken then
+        humanoid.PlatformStand = wasPlatform
+        return
+    end
+
+    -- tahap 2: tutup tangan (memeluk) (0.45s)
+    local hug = makeHugPose()
+    local tws = {
+        tweenMotor(motors.rs, hug.rightShoulder, 0.45),
+        tweenMotor(motors.ls, hug.leftShoulder, 0.45),
+        tweenMotor(motors.neck, hug.neck, 0.45),
+        tweenMotor(motors.waist, hug.waist, 0.45),
+    }
+
+    -- tunggu selesai
+    task.wait(0.5)
+    if not hugging or hugToken ~= myToken then
+        humanoid.PlatformStand = wasPlatform
+        return
+    end
+
+    -- tahan pose peluk ~1.5 detik
+    task.wait(1.5)
+    if not hugging or hugToken ~= myToken then
+        humanoid.PlatformStand = wasPlatform
+        return
+    end
+
+    -- tahap 3: kembali ke pose normal (0.5s)
+    local resetPose = {
+        rightShoulder = CFrame.new(),
+        leftShoulder  = CFrame.new(),
+        neck          = CFrame.new(),
+        waist         = CFrame.new(),
+    }
+    tweenMotor(motors.rs, resetPose.rightShoulder, 0.5)
+    tweenMotor(motors.ls, resetPose.leftShoulder, 0.5)
+    tweenMotor(motors.neck, resetPose.neck, 0.5)
+    tweenMotor(motors.waist, resetPose.waist, 0.5)
+
+    task.wait(0.6)
+    humanoid.PlatformStand = wasPlatform
+    hugging = false
+    -- kembalikan posisi karakter agar tidak bergeser
+    if root and root.Parent then
+        root.CFrame = startCFrame
+    end
+    resetAllMotors()
+end
+
+-- helper status yang aman dari gui hilang
+local statusLabel
+local function setStatusSafe(msg)
+    if statusLabel and statusLabel.Parent then
+        statusLabel.Text = tostring(msg)
+    end
+end
+
+-- status label bawah tombol (kita tambahkan setelah semua deklarasi)
+statusLabel = Instance.new("TextLabel")
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Tekan PELUK!"
+statusLabel.Position = UDim2.fromOffset(10, 96)
+statusLabel.Size = UDim2.fromOffset(180, 40)
+statusLabel.TextWrapped = true
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.TextColor3 = Color3.fromRGB(190, 194, 207)
+statusLabel.TextSize = 10
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = main
+
+-- perbesar panel karena ada status
+main.Size = UDim2.fromOffset(200, 140)
+
+--====================================================
+-- TOMBOL
+--====================================================
+listen(hugBtn.MouseButton1Click:Connect(function()
+    if hugging then return end
+    task.spawn(playHug)
+end))
+
+listen(stopBtn.MouseButton1Click:Connect(function()
+    hugging = false
+    hugToken += 1
+    local char = localPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid.PlatformStand = false end
+    resetAllMotors()
+    setStatusSafe("Dihentikan.")
+end))
+
+listen(resetBtn.MouseButton1Click:Connect(function()
+    hugging = false
+    hugToken += 1
+    local char = localPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid.PlatformStand = false end
+    resetAllMotors()
+    setStatusSafe("Pose di-reset.")
+end))
+
+--====================================================
+-- CLEANUP
+--====================================================
+gui.Destroying:Connect(function()
+    hugging = false
+    hugToken += 1
+    local char = localPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid.PlatformStand = false end
+    resetAllMotors()
+    for _, c in ipairs(connections) do
+        if c.Connected then c:Disconnect() end
+    end
+    table.clear(connections)
+end)
+
+print("[XLORD Hug Animation] Loaded")
