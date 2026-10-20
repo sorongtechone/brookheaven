@@ -1,13 +1,7 @@
 --====================================================
--- XLORD PROP MEASURE & HUMAN LAYOUT (15 slot)
--- Scan prop -> ukur -> auto-berdiri -> susun jadi orang.
--- Pembagian slot:
---   Tangan kiri  : 3 prop
---   Tangan kanan : 3 prop
---   Kaki kiri    : 2 prop
---   Kaki kanan   : 2 prop
---   Badan+Kepala : 5 prop (sisa)
--- Total: 15 slot. Tanpa ekor, tanpa sayap, tanpa tanduk.
+-- XLORD PROP MEASURE & HUMAN LAYOUT (15 slot, chain)
+-- Tangan & kaki disambung berantai supaya prop benar-benar
+-- menempel satu sama lain (tanpa celah).
 --====================================================
 
 local Players = game:GetService("Players")
@@ -83,7 +77,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "PROP MEASURE | HUMAN (15)"
+header.Text = "PROP MEASURE | HUMAN (CHAIN)"
 header.Position = UDim2.fromOffset(10, 0)
 header.Size = UDim2.fromOffset(250, 40)
 header.TextXAlignment = Enum.TextXAlignment.Left
@@ -137,7 +131,7 @@ local function makeField(labelText, defaultText, x, y, w)
 end
 
 local scaleBox = makeField("Skala tubuh:", "2", 10, 126, 92)
-local gapBox   = makeField("Celah antar prop:", "0.5", 110, 126, 92)
+local gapBox   = makeField("Celah antar prop:", "0", 110, 126, 92)
 local distBox  = makeField("Jarak ke kamu:", "8", 210, 126, 92)
 
 local info = Instance.new("TextLabel")
@@ -187,8 +181,8 @@ end
 --====================================================
 -- STATE
 --====================================================
-local myProps = {}        -- {object, remote, size, center, standRotation, finalSize}
-local assignedSlots = {}  -- {prop data, slotName, localPos, localRot}
+local myProps = {}
+local assignedSlots = {}
 local layoutRunning = false
 local layoutToken = 0
 
@@ -349,49 +343,64 @@ end
 listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
 
 --====================================================
--- SKELETON ORANG (TEPAT 15 SLOT)
--- urutan:
---   1..3   : tangan kiri (3)
---   4..6   : tangan kanan (3)
---   7..8   : kaki kiri (2)
---   9..10  : kaki kanan (2)
---   11..15 : badan + kepala (5)
+-- HELPERS CHAIN
+-- Rantai prop: tiap segmen diletakkan tepat di ujung segmen
+-- sebelumnya. "base" = titik sambung di pangkal segmen,
+-- "tip"  = titik sambung di ujung segmen.
 --
--- x, y = posisi dalam "unit tubuh":
---   x = -1 (kiri) sampai +1 (kanan)
---   y = 0 (kaki) sampai 1 (ujung kepala)
--- rotZ = kemiringan prop terhadap sumbu Z (derajat)
+-- Untuk tangan, segmen diarahkan ke bawah dengan sudut
+-- kecil supaya melengkung halus dan tetap tersambung.
+--====================================================
+local function segLength(finalSize)
+    -- panjang segmen sepanjang arah "turun" (Y)
+    return finalSize.Y
+end
+
+local function segHalfThickness(finalSize)
+    -- setengah ketebalan (dipakai untuk offset awal dari bahu)
+    return finalSize.X * 0.5
+end
+
+--====================================================
+-- SKELETON ORANG (15 slot, versi chain)
+-- Struktur:
+--   torso: 5 slot (badan bawah -> tengah -> atas -> leher -> kepala),
+--          disusun berantai vertikal.
+--   tangan kiri/kanan: 3 slot berantai, mulai dari bahu.
+--   kaki kiri/kanan: 2 slot berantai, mulai dari pinggul.
+--
+-- "attachX"/"attachY" = titik sambung awal (di koordinat tubuh).
+-- "angle" = sudut kemiringan segmen (derajat, + = ke kiri, - = ke kanan)
 --====================================================
 local function buildHumanSkeleton()
     local S = {}
 
-    -- ===== TANGAN KIRI (3 prop) =====
-    -- bahu -> lengan atas -> tangan
-    table.insert(S, { name = "Tangan Kiri 1", x = -0.55, y = 0.82, rotZ =  20 })
-    table.insert(S, { name = "Tangan Kiri 2", x = -0.75, y = 0.68, rotZ =  55 })
-    table.insert(S, { name = "Tangan Kiri 3", x = -0.90, y = 0.50, rotZ =  85 })
+    -- ===== TORSO (5) =====
+    -- berantai vertikal, mulai dari pinggul (y = hipY)
+    table.insert(S, { name = "Badan Bawah",  chain = "torso", angle = 0 })
+    table.insert(S, { name = "Badan Tengah", chain = "torso", angle = 0 })
+    table.insert(S, { name = "Badan Atas",   chain = "torso", angle = 0 })
+    table.insert(S, { name = "Leher",        chain = "torso", angle = 0 })
+    table.insert(S, { name = "Kepala",       chain = "torso", angle = 0 })
 
-    -- ===== TANGAN KANAN (3 prop) =====
-    table.insert(S, { name = "Tangan Kanan 1", x =  0.55, y = 0.82, rotZ = -20 })
-    table.insert(S, { name = "Tangan Kanan 2", x =  0.75, y = 0.68, rotZ = -55 })
-    table.insert(S, { name = "Tangan Kanan 3", x =  0.90, y = 0.50, rotZ = -85 })
+    -- ===== TANGAN KIRI (3) =====
+    -- berantai dari bahu kiri, melengkung ke bawah keluar
+    table.insert(S, { name = "Tangan Kiri 1", chain = "armL", angle =  15 })
+    table.insert(S, { name = "Tangan Kiri 2", chain = "armL", angle =  30 })
+    table.insert(S, { name = "Tangan Kiri 3", chain = "armL", angle =  45 })
 
-    -- ===== KAKI KIRI (2 prop) =====
-    -- paha -> kaki
-    table.insert(S, { name = "Kaki Kiri 1", x = -0.18, y = 0.30, rotZ = 0 })
-    table.insert(S, { name = "Kaki Kiri 2", x = -0.18, y = 0.05, rotZ = 0 })
+    -- ===== TANGAN KANAN (3) =====
+    table.insert(S, { name = "Tangan Kanan 1", chain = "armR", angle = -15 })
+    table.insert(S, { name = "Tangan Kanan 2", chain = "armR", angle = -30 })
+    table.insert(S, { name = "Tangan Kanan 3", chain = "armR", angle = -45 })
 
-    -- ===== KAKI KANAN (2 prop) =====
-    table.insert(S, { name = "Kaki Kanan 1", x =  0.18, y = 0.30, rotZ = 0 })
-    table.insert(S, { name = "Kaki Kanan 2", x =  0.18, y = 0.05, rotZ = 0 })
+    -- ===== KAKI KIRI (2) =====
+    table.insert(S, { name = "Kaki Kiri 1", chain = "legL", angle = 0 })
+    table.insert(S, { name = "Kaki Kiri 2", chain = "legL", angle = 0 })
 
-    -- ===== BADAN + KEPALA (5 prop) =====
-    -- bawah -> tengah -> atas -> leher -> kepala
-    table.insert(S, { name = "Badan Bawah",  x = 0, y = 0.40, rotZ = 0 })
-    table.insert(S, { name = "Badan Tengah", x = 0, y = 0.55, rotZ = 0 })
-    table.insert(S, { name = "Badan Atas",   x = 0, y = 0.70, rotZ = 0 })
-    table.insert(S, { name = "Leher",        x = 0, y = 0.83, rotZ = 0 })
-    table.insert(S, { name = "Kepala",       x = 0, y = 0.94, rotZ = 0 })
+    -- ===== KAKI KANAN (2) =====
+    table.insert(S, { name = "Kaki Kanan 1", chain = "legR", angle = 0 })
+    table.insert(S, { name = "Kaki Kanan 2", chain = "legR", angle = 0 })
 
     return S
 end
@@ -399,17 +408,13 @@ end
 local HUMAN_SKELETON = buildHumanSkeleton()
 
 --====================================================
--- ASSIGN SLOT
--- Prop diurutkan ulang supaya tiap bagian dapat porsi yang pas.
--- Kalau prop kurang dari 15, slot diisi mulai dari yang paling
--- penting dulu (badan & kepala), lalu tangan, lalu kaki.
+-- ASSIGN SLOT (versi chain)
+-- Prop diurutkan ulang sesuai prioritas, lalu tiap bagian
+-- disusun berantai supaya benar-benar menempel.
 --
--- Urutan prioritas pengisian (biar siluet orang langsung kebentuk):
---   1. Badan (bawah, tengah, atas)
---   2. Kepala
---   3. Leher (kalau ada)
---   4. Tangan kiri & kanan (silih berganti)
---   5. Kaki kiri & kanan
+-- Penting: panjang tiap segmen memakai finalSize.Y (tinggi
+-- setelah auto-berdiri), dan "tip" segmen berikutnya = "base"
+-- segmen ini + panjang segmen * arah sudut.
 --====================================================
 local PRIORITY_ORDER = {
     "Badan Bawah", "Badan Tengah", "Badan Atas",
@@ -421,47 +426,180 @@ local PRIORITY_ORDER = {
     "Kaki Kiri 2", "Kaki Kanan 2",
 }
 
+-- arahkan vektor (x, y) berdasarkan sudut terhadap sumbu Y
+-- angle 0 = lurus ke atas, angle positif = miring ke kiri
+local function dirFromAngle(angleDeg)
+    local r = math.rad(angleDeg)
+    -- arah "turun" (ke bawah) karena segmen tergantung
+    -- komponen: x = -sin(angle), y = -cos(angle)
+    return Vector3.new(-math.sin(r), -math.cos(r), 0)
+end
+
 local function assignSlots(scale, gap)
     assignedSlots = {}
     if #myProps == 0 then return end
 
-    -- ukuran tubuh dari rata-rata prop
-    local sumY, sumX = 0, 0
-    for _, d in ipairs(myProps) do
-        sumY = sumY + d.finalSize.Y
-        sumX = sumX + d.finalSize.X
-    end
+    -- ukuran tubuh rata-rata untuk menentukan jarak dasar
+    local sumY = 0
+    for _, d in ipairs(myProps) do sumY = sumY + d.finalSize.Y end
     local avgHeight = sumY / #myProps
-    local avgWidth  = sumX / #myProps
 
-    -- bodyHeight = tinggi orang (kaki -> kepala) dalam stud
-    -- bodyWidth  = jarak bahu ke bahu dalam stud
-    local bodyHeight = (avgHeight * 8 * scale) + (gap * #myProps)
-    local bodyWidth  = (avgWidth  * 4 * scale) + (gap * 4)
+    -- base ukuran tubuh
+    local bodyHeight = avgHeight * 8 * scale
 
-    -- peta nama slot -> deskripsi skeleton
+    -- peta nama slot -> deskripsi
     local byName = {}
     for _, slot in ipairs(HUMAN_SKELETON) do byName[slot.name] = slot end
 
-    -- isi slot sesuai prioritas sampai prop atau slot habis
-    local used = 0
+    -- kumpulkan prop sesuai prioritas
+    local ordered = {}
     for _, slotName in ipairs(PRIORITY_ORDER) do
-        if used >= #myProps then break end
-        used += 1
-        local data = myProps[used]
+        if #ordered >= #myProps then break end
         local slot = byName[slotName]
         if slot then
-            local localPos = Vector3.new(
-                slot.x * bodyWidth,
-                slot.y * bodyHeight,
-                0
-            )
-            local localRot = CFrame.Angles(0, 0, math.rad(slot.rotZ))
+            table.insert(ordered, slotName)
+        end
+    end
+
+    -- simpan hasil per slot
+    local result = {}
+
+    ------------------------------------------------
+    -- TORSO: berantai vertikal dari pinggul ke atas
+    ------------------------------------------------
+    local torsoSlots = {}
+    for i, name in ipairs(ordered) do
+        local slot = byName[name]
+        if slot.chain == "torso" then
+            table.insert(torsoSlots, { name = name, data = myProps[i] })
+        end
+    end
+
+    -- mulai dari pinggul (y = 0.35 * bodyHeight)
+    local torsoBaseY = 0.35 * bodyHeight
+    local torsoBaseX = 0
+    local cursorY = torsoBaseY
+
+    -- susun dari bawah ke atas
+    for idx = #torsoSlots, 1, -1 do
+        local entry = torsoSlots[idx]
+        local fs = entry.data.finalSize
+        local h = fs.Y * scale
+        -- pusat segmen = base + h/2 ke atas
+        result[entry.name] = {
+            data = entry.data,
+            localPos = Vector3.new(torsoBaseX, cursorY + h * 0.5, 0),
+            localRot = CFrame.new(),
+        }
+        cursorY = cursorY + h + gap
+    end
+
+    ------------------------------------------------
+    -- TANGAN: berantai dari bahu
+    ------------------------------------------------
+    local function buildArm(side, prefix, startX, startY, angleList)
+        local armSlots = {}
+        for i, name in ipairs(ordered) do
+            if name:sub(1, #prefix) == prefix then
+                table.insert(armSlots, { name = name, data = myProps[i] })
+            end
+        end
+        -- urutkan sesuai urutan tangan (1, 2, 3)
+        table.sort(armSlots, function(a, b)
+            local na = tonumber(a.name:match("(%d+)$")) or 0
+            local nb = tonumber(b.name:match("(%d+)$")) or 0
+            return na < nb
+        end)
+
+        local baseX = startX
+        local baseY = startY
+        for idx, entry in ipairs(armSlots) do
+            local fs = entry.data.finalSize
+            local len = fs.Y * scale
+            local angle = angleList[idx] or 0
+            local dir = dirFromAngle(angle)
+
+            -- pusat = base + dir * len/2
+            local centerX = baseX + dir.X * len * 0.5
+            local centerY = baseY + dir.Y * len * 0.5
+
+            local rot = CFrame.Angles(0, 0, math.rad(-angle))
+
+            result[entry.name] = {
+                data = entry.data,
+                localPos = Vector3.new(centerX, centerY, 0),
+                localRot = rot,
+            }
+
+            -- ujung segmen = base + dir * len
+            baseX = baseX + dir.X * (len + gap)
+            baseY = baseY + dir.Y * (len + gap)
+        end
+    end
+
+    -- bahu kiri/kanan sedikit di luar torso
+    local shoulderX = 0.35 * bodyHeight * 0.25
+    local shoulderY = torsoBaseY + (torsoSlots[1] and torsoSlots[#torsoSlots].data.finalSize.Y * scale * (#torsoSlots) * 0.6 or 0)
+    -- lebih tepat: taruh bahu di puncak torso
+    shoulderY = cursorY - gap
+
+    buildArm("L", "Tangan Kiri",  -shoulderX, shoulderY, { 15, 30, 45 })
+    buildArm("R", "Tangan Kanan",  shoulderX, shoulderY, { -15, -30, -45 })
+
+    ------------------------------------------------
+    -- KAKI: berantai dari pinggul ke bawah
+    ------------------------------------------------
+    local hipX = 0.18 * bodyHeight * 0.25
+    local hipY = torsoBaseY
+
+    local function buildLeg(prefix, startX, startY)
+        local legSlots = {}
+        for i, name in ipairs(ordered) do
+            if name:sub(1, #prefix) == prefix then
+                table.insert(legSlots, { name = name, data = myProps[i] })
+            end
+        end
+        table.sort(legSlots, function(a, b)
+            local na = tonumber(a.name:match("(%d+)$")) or 0
+            local nb = tonumber(b.name:match("(%d+)$")) or 0
+            return na < nb
+        end)
+
+        local baseX = startX
+        local baseY = startY
+        for idx, entry in ipairs(legSlots) do
+            local fs = entry.data.finalSize
+            local len = fs.Y * scale
+            local dir = Vector3.new(0, -1, 0)
+
+            local centerX = baseX + dir.X * len * 0.5
+            local centerY = baseY + dir.Y * len * 0.5
+
+            result[entry.name] = {
+                data = entry.data,
+                localPos = Vector3.new(centerX, centerY, 0),
+                localRot = CFrame.new(),
+            }
+
+            baseX = baseX + dir.X * (len + gap)
+            baseY = baseY + dir.Y * (len + gap)
+        end
+    end
+
+    buildLeg("Kaki Kiri",  -hipX, hipY)
+    buildLeg("Kaki Kanan",  hipX, hipY)
+
+    ------------------------------------------------
+    -- Kumpulkan hasil ke assignedSlots
+    ------------------------------------------------
+    for _, slotName in ipairs(PRIORITY_ORDER) do
+        local entry = result[slotName]
+        if entry then
             table.insert(assignedSlots, {
-                data = data,
+                data = entry.data,
                 name = slotName,
-                localPos = localPos,
-                localRot = localRot,
+                localPos = entry.localPos,
+                localRot = entry.localRot,
             })
         end
     end
@@ -486,7 +624,7 @@ local function startLayout()
     if #myProps == 0 then setStatus("Scan prop dulu.") return end
 
     local scale = math.clamp(tonumber(scaleBox.Text) or 2, 0.5, 10)
-    local gap   = math.clamp(tonumber(gapBox.Text) or 0.5, 0, 10)
+    local gap   = math.clamp(tonumber(gapBox.Text) or 0, 0, 10)
     local dist  = math.clamp(tonumber(distBox.Text) or 8, 2, 60)
 
     assignSlots(scale, gap)
@@ -585,4 +723,4 @@ gui.Destroying:Connect(function()
 end)
 
 setStatus("Siap | Tekan SCAN & UKUR PROP SAYA")
-print("[XLORD Prop Measure | Human 15] Loaded")
+print("[XLORD Prop Measure | Human Chain] Loaded")
