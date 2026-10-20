@@ -1,4 +1,8 @@
-
+--====================================================
+-- XLORD PROP MEASURE & HUMAN LAYOUT
+-- Scan prop -> ukur -> auto-berdiri -> susun jadi bentuk orang.
+-- Tanpa ekor, tanpa sayap, tanpa tanduk.
+--====================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -73,7 +77,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "PROP MEASURE & LAYOUT"
+header.Text = "PROP MEASURE | HUMAN"
 header.Position = UDim2.fromOffset(10, 0)
 header.Size = UDim2.fromOffset(250, 40)
 header.TextXAlignment = Enum.TextXAlignment.Left
@@ -91,7 +95,7 @@ local scanBtn = button(main, "Scan", "SCAN & UKUR PROP SAYA", COLORS.purple)
 scanBtn.Position = UDim2.fromOffset(10, 46)
 scanBtn.Size = UDim2.fromOffset(300, 32)
 
-local layoutBtn = button(main, "Layout", "SUSUN BERJEJER", COLORS.green)
+local layoutBtn = button(main, "Layout", "SUSUN JADI ORANG", COLORS.green)
 layoutBtn.Position = UDim2.fromOffset(10, 84)
 layoutBtn.Size = UDim2.fromOffset(145, 34)
 
@@ -126,13 +130,14 @@ local function makeField(labelText, defaultText, x, y, w)
     return box
 end
 
-local gapBox    = makeField("Jarak antar prop:", "2", 10, 126, 140)
-local heightBox = makeField("Tinggi (Y):", "0", 170, 126, 140)
+local scaleBox   = makeField("Skala tubuh:", "2", 10, 126, 92)
+local gapBox     = makeField("Celah antar prop:", "0.5", 110, 126, 92)
+local distBox    = makeField("Jarak ke kamu:", "8", 210, 126, 92)
 
 local info = Instance.new("TextLabel")
 info.Name = "Info"
 info.BackgroundTransparency = 1
-info.Text = "Prop: 0 | Total lebar: 0"
+info.Text = "Prop: 0 | Slot terisi: 0"
 info.Position = UDim2.fromOffset(10, 176)
 info.Size = UDim2.fromOffset(300, 20)
 info.TextXAlignment = Enum.TextXAlignment.Left
@@ -176,7 +181,8 @@ end
 --====================================================
 -- STATE
 --====================================================
-local myProps = {}        -- {object, remote, size, center, standRotation}
+local myProps = {}        -- {object, remote, size, center, standRotation, finalSize}
+local assignedSlots = {}  -- {prop data, localPos, localRot}
 local layoutRunning = false
 local layoutToken = 0
 
@@ -218,13 +224,7 @@ local function measureProp(obj)
 end
 
 --====================================================
--- TENTUKAN ROTASI "BERDIRI"
--- Jika prop lebih lebar (X) daripada tinggi (Y), rotasi 90°
--- pada Z supaya sumbu X jadi vertikal.
--- Jika lebih dalam (Z) daripada tinggi, rotasi 90° pada X.
--- Jika sudah tinggi, tidak perlu rotasi.
--- Fungsi ini juga mengembalikan ukuran SETELAH rotasi,
--- supaya perhitungan layout pakai dimensi yang benar.
+-- AUTO-BERDIRI
 --====================================================
 local function computeStandRotation(size)
     local sx, sy, sz = size.X, size.Y, size.Z
@@ -232,11 +232,9 @@ local function computeStandRotation(size)
     local finalSize = Vector3.new(sx, sy, sz)
 
     if sx > sy and sx >= sz then
-        -- rebah ke samping -> rotasi Z 90°: X jadi Y, Y jadi X
         rotation = CFrame.Angles(0, 0, math.rad(90))
         finalSize = Vector3.new(sy, sx, sz)
     elseif sz > sy and sz > sx then
-        -- rebah ke depan -> rotasi X 90°: Z jadi Y, Y jadi Z
         rotation = CFrame.Angles(math.rad(90), 0, 0)
         finalSize = Vector3.new(sx, sz, sy)
     end
@@ -249,6 +247,7 @@ end
 --====================================================
 local function scanMyProps()
     myProps = {}
+    assignedSlots = {}
     local seen = {}
     local username = localPlayer.Name:lower()
     local ownedName = "prop" .. username
@@ -296,12 +295,10 @@ local function scanMyProps()
         if child:IsA("TextLabel") then child:Destroy() end
     end
 
-    local totalWidth = 0
     local standCount = 0
     for i, data in ipairs(myProps) do
         local s = data.size
         local fs = data.finalSize
-        totalWidth = totalWidth + fs.X
         local isStanding = data.standRotation ~= CFrame.new()
         if isStanding then standCount += 1 end
 
@@ -329,15 +326,15 @@ local function scanMyProps()
 
     listFrame.CanvasSize = UDim2.fromOffset(0, #myProps * 43 + 6)
     info.Text = string.format(
-        "Prop: %d | Berdiri: %d | Lebar total: %.1f",
-        #myProps, standCount, totalWidth
+        "Prop: %d | Berdiri: %d | Slot terisi: 0",
+        #myProps, standCount
     )
 
     if #myProps == 0 then
         setStatus("Tidak ada prop milikmu. Spawn prop manual dahulu.")
     else
         setStatus(string.format(
-            "Ditemukan %d prop (%d otomatis berdiri). Tekan SUSUN BERJEJER.",
+            "Ditemukan %d prop (%d otomatis berdiri). Tekan SUSUN JADI ORANG.",
             #myProps, standCount
         ))
     end
@@ -346,9 +343,118 @@ end
 listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
 
 --====================================================
--- SUSUN BERJEJER
--- Posisi & lebar pakai finalSize (ukuran setelah rotasi).
--- GoalCF = posisi * rotasi player * rotasi berdiri prop.
+-- BENTUK ORANG (HUMANOID LAYOUT)
+-- Proporsi berdasarkan tinggi rata-rata prop.
+-- Setiap slot dideskripsikan sebagai:
+--   {name, x, y (dalam "unit tubuh"), rotZ, rotX}
+-- Lalu posisi dikalikan ukuran tubuh aktual.
+-- Tanpa ekor/sayap/tanduk.
+--====================================================
+local function buildHumanSkeleton()
+    -- "unit" = tinggi tubuh manusia (kepala sampai kaki)
+    -- y dari 0 (kaki) sampai 1 (ujung kepala)
+    local S = {}
+
+    -- Kepala
+    table.insert(S, { name = "Kepala",      x = 0,     y = 1.00, rotZ = 0,   rotX = 0 })
+    -- Leher (opsional, kalau prop cukup)
+    table.insert(S, { name = "Leher",       x = 0,     y = 0.88, rotZ = 0,   rotX = 0 })
+    -- Badan (dari bawah ke atas)
+    table.insert(S, { name = "Badan Bawah", x = 0,     y = 0.55, rotZ = 0,   rotX = 0 })
+    table.insert(S, { name = "Badan Tengah",x = 0,     y = 0.70, rotZ = 0,   rotX = 0 })
+    table.insert(S, { name = "Badan Atas",  x = 0,     y = 0.82, rotZ = 0,   rotX = 0 })
+    -- Bahu kiri/kanan
+    table.insert(S, { name = "Bahu Kiri",   x = -0.30, y = 0.82, rotZ =  15, rotX = 0 })
+    table.insert(S, { name = "Bahu Kanan",  x =  0.30, y = 0.82, rotZ = -15, rotX = 0 })
+    -- Lengan atas
+    table.insert(S, { name = "Lengan Atas Kiri",  x = -0.42, y = 0.70, rotZ =  40, rotX = 0 })
+    table.insert(S, { name = "Lengan Atas Kanan", x =  0.42, y = 0.70, rotZ = -40, rotX = 0 })
+    -- Lengan bawah
+    table.insert(S, { name = "Lengan Bawah Kiri",  x = -0.52, y = 0.55, rotZ =  70, rotX = 0 })
+    table.insert(S, { name = "Lengan Bawah Kanan", x =  0.52, y = 0.55, rotZ = -70, rotX = 0 })
+    -- Tangan
+    table.insert(S, { name = "Tangan Kiri",  x = -0.58, y = 0.42, rotZ =  85, rotX = 0 })
+    table.insert(S, { name = "Tangan Kanan", x =  0.58, y = 0.42, rotZ = -85, rotX = 0 })
+    -- Pinggul
+    table.insert(S, { name = "Pinggul Kiri",  x = -0.18, y = 0.48, rotZ = 0, rotX = 0 })
+    table.insert(S, { name = "Pinggul Kanan", x =  0.18, y = 0.48, rotZ = 0, rotX = 0 })
+    -- Paha
+    table.insert(S, { name = "Paha Kiri",  x = -0.18, y = 0.32, rotZ = 0, rotX = 0 })
+    table.insert(S, { name = "Paha Kanan", x =  0.18, y = 0.32, rotZ = 0, rotX = 0 })
+    -- Lutut / betis
+    table.insert(S, { name = "Betis Kiri",  x = -0.18, y = 0.15, rotZ = 0, rotX = 0 })
+    table.insert(S, { name = "Betis Kanan", x =  0.18, y = 0.15, rotZ = 0, rotX = 0 })
+    -- Kaki
+    table.insert(S, { name = "Kaki Kiri",  x = -0.18, y = 0.03, rotZ = 0, rotX = 0 })
+    table.insert(S, { name = "Kaki Kanan", x =  0.18, y = 0.03, rotZ = 0, rotX = 0 })
+
+    return S
+end
+
+local HUMAN_SKELETON = buildHumanSkeleton()
+
+--====================================================
+-- ASSIGN SLOT
+-- Slot tubuh dipetakan ke prop yang tersedia (urut dari scan).
+-- Posisi lokal tiap slot dihitung dari:
+--   x * bodyWidth * scale
+--   y * bodyHeight * scale
+-- Rotasi lokal = rotZ (putar sumbu Z) dan rotX (putar sumbu X).
+--====================================================
+local function assignSlots(scale, gap)
+    assignedSlots = {}
+    if #myProps == 0 then return end
+
+    -- ukuran "unit tubuh" = rata-rata finalSize prop
+    local sumY, sumX = 0, 0
+    for _, d in ipairs(myProps) do
+        sumY = sumY + d.finalSize.Y
+        sumX = sumX + d.finalSize.X
+    end
+    local avgHeight = sumY / #myProps
+    local avgWidth  = sumX / #myProps
+
+    -- bodyHeight = total tinggi tubuh manusia (kepala-kaki) dalam stud
+    -- bodyWidth  = lebar tubuh (bahu ke bahu) dalam stud
+    local bodyHeight = avgHeight * 8 * scale   -- 8 "unit" vertikal
+    local bodyWidth  = avgWidth  * 4 * scale   -- 4 "unit" horizontal
+
+    -- tambah celah antar prop
+    bodyHeight = bodyHeight + gap * #myProps
+    bodyWidth  = bodyWidth  + gap * 4
+
+    for i, data in ipairs(myProps) do
+        local slot = HUMAN_SKELETON[i]
+        if not slot then break end
+
+        local localPos = Vector3.new(
+            slot.x * bodyWidth,
+            slot.y * bodyHeight,
+            0
+        )
+
+        local localRot = CFrame.Angles(
+            math.rad(slot.rotX),
+            0,
+            math.rad(slot.rotZ)
+        )
+
+        table.insert(assignedSlots, {
+            data = data,
+            name = slot.name,
+            localPos = localPos,
+            localRot = localRot,
+        })
+    end
+
+    info.Text = string.format(
+        "Prop: %d | Slot terisi: %d | Tinggi: %.1f",
+        #myProps, #assignedSlots, bodyHeight
+    )
+end
+
+--====================================================
+-- SUSUN JADI ORANG (mengikuti player)
 --====================================================
 local function stopLayout()
     layoutRunning = false
@@ -360,13 +466,22 @@ local function startLayout()
     if layoutRunning then return end
     if #myProps == 0 then setStatus("Scan prop dulu.") return end
 
-    local gap = math.clamp(tonumber(gapBox.Text) or 2, 0, 50)
-    local heightOffset = math.clamp(tonumber(heightBox.Text) or 0, -20, 50)
+    local scale = math.clamp(tonumber(scaleBox.Text) or 2, 0.5, 10)
+    local gap   = math.clamp(tonumber(gapBox.Text) or 0.5, 0, 10)
+    local dist  = math.clamp(tonumber(distBox.Text) or 8, 2, 60)
+
+    assignSlots(scale, gap)
+    if #assignedSlots == 0 then
+        setStatus("Slot tubuh kosong. Butuh minimal 1 prop.")
+        return
+    end
 
     layoutRunning = true
     layoutToken += 1
     local myToken = layoutToken
-    setStatus(string.format("Menyusun %d prop berjejer...", #myProps))
+    setStatus(string.format(
+        "Menyusun %d prop jadi orang...", #assignedSlots
+    ))
 
     listen(RunService.Heartbeat:Connect(function()
         if not layoutRunning or layoutToken ~= myToken then return end
@@ -376,41 +491,35 @@ local function startLayout()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return end
 
-        -- total lebar pakai finalSize
-        local totalWidth = 0
-        for i, data in ipairs(myProps) do
-            totalWidth = totalWidth + data.finalSize.X
-            if i < #myProps then totalWidth = totalWidth + gap end
-        end
-
-        local cursor = -totalWidth * 0.5
-        local baseCF = root.CFrame
+        -- pusat tubuh di belakang player
+        local back = root.CFrame.LookVector * -dist
+        local centerPos = root.Position + back
+        local centerCF = CFrame.new(centerPos, centerPos + root.CFrame.LookVector)
 
         local okCount, errCount = 0, 0
-        for _, data in ipairs(myProps) do
-            local fs = data.finalSize
-            local localX = cursor + fs.X * 0.5
-            -- pakai tinggi setelah rotasi (finalSize.Y)
-            local localY = heightOffset + fs.Y * 0.5
-            local localPos = Vector3.new(localX, localY, -8)
-            local worldPos = baseCF * localPos
+        for _, slot in ipairs(assignedSlots) do
+            local data = slot.data
+            local remote = data.remote
+            if remote and remote.Parent and remote:IsA("RemoteFunction") then
+                local worldPos = centerCF * slot.localPos
+                -- rotasi: pusat -> rotasi lokal slot -> rotasi berdiri prop
+                local goalCF = CFrame.new(worldPos)
+                    * centerCF.Rotation
+                    * slot.localRot
+                    * data.standRotation
 
-            -- rotasi player + rotasi berdiri prop
-            local goalCF = CFrame.new(worldPos)
-                * baseCF.Rotation
-                * data.standRotation
-
-            local ok = pcall(function()
-                data.remote:InvokeServer(goalCF)
-            end)
-            if ok then okCount += 1 else errCount += 1 end
-
-            cursor = cursor + fs.X + gap
+                local ok = pcall(function()
+                    remote:InvokeServer(goalCF)
+                end)
+                if ok then okCount += 1 else errCount += 1 end
+            else
+                errCount += 1
+            end
         end
 
         setStatus(string.format(
-            "Layout ON | OK: %d | Err: %d | lebar: %.1f",
-            okCount, errCount, totalWidth
+            "Orang ON | OK: %d | Err: %d",
+            okCount, errCount
         ))
     end))
 end
@@ -459,4 +568,4 @@ gui.Destroying:Connect(function()
 end)
 
 setStatus("Siap | Tekan SCAN & UKUR PROP SAYA")
-print("[XLORD Prop Measure] Loaded")
+print("[XLORD Prop Measure | Human] Loaded")
