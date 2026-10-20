@@ -1,9 +1,4 @@
---====================================================
--- XLORD PROP MEASURE & LAYOUT (auto-berdiri)
--- Scan prop saya -> ukur -> susun berjejer
--- Prop yang lebih lebar dari tinggi otomatis dirotasi
--- supaya berdiri (sumbu panjang jadi vertikal).
---====================================================
+
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
