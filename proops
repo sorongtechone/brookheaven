@@ -1,7 +1,8 @@
 --====================================================
--- XLORD PROP MEASURE & LAYOUT (versi sederhana)
--- Scan prop saya -> ukur ukurannya -> susun berjejer
--- dengan jarak berdasarkan ukuran asli prop (tanpa skala).
+-- XLORD PROP MEASURE & LAYOUT (auto-berdiri)
+-- Scan prop saya -> ukur -> susun berjejer.
+-- Prop yang lebih lebar dari tinggi otomatis dirotasi
+-- supaya berdiri (sumbu panjang jadi vertikal).
 --====================================================
 
 local Players = game:GetService("Players")
@@ -180,15 +181,12 @@ end
 --====================================================
 -- STATE
 --====================================================
-local myProps = {}        -- {object, remote, size, center}
+local myProps = {}        -- {object, remote, size, center, standRotation}
 local layoutRunning = false
 local layoutToken = 0
 
 --====================================================
 -- UKUR PROP
--- Ukuran diambil dari bounding box (Model: GetExtentsSize,
--- BasePart: Size). Untuk Model, dihitung juga center-nya
--- dari GetBoundingBox supaya offset tepat.
 --====================================================
 local function measureProp(obj)
     if obj:IsA("Model") then
@@ -198,7 +196,6 @@ local function measureProp(obj)
         if ok and cf and size then
             return size, cf.Position
         end
-        -- fallback: hitung manual dari semua part
         local minV = Vector3.new(math.huge, math.huge, math.huge)
         local maxV = Vector3.new(-math.huge, -math.huge, -math.huge)
         for _, part in ipairs(obj:GetDescendants()) do
@@ -218,13 +215,38 @@ local function measureProp(obj)
             end
         end
         if minV.X == math.huge then return Vector3.zero, obj:GetPivot().Position end
-        local size = maxV - minV
-        local center = (minV + maxV) * 0.5
-        return size, center
+        return (maxV - minV), (minV + maxV) * 0.5
     elseif obj:IsA("BasePart") then
         return obj.Size, obj.Position
     end
     return Vector3.zero, Vector3.zero
+end
+
+--====================================================
+-- TENTUKAN ROTASI "BERDIRI"
+-- Jika prop lebih lebar (X) daripada tinggi (Y), rotasi 90°
+-- pada Z supaya sumbu X jadi vertikal.
+-- Jika lebih dalam (Z) daripada tinggi, rotasi 90° pada X.
+-- Jika sudah tinggi, tidak perlu rotasi.
+-- Fungsi ini juga mengembalikan ukuran SETELAH rotasi,
+-- supaya perhitungan layout pakai dimensi yang benar.
+--====================================================
+local function computeStandRotation(size)
+    local sx, sy, sz = size.X, size.Y, size.Z
+    local rotation = CFrame.new()
+    local finalSize = Vector3.new(sx, sy, sz)
+
+    if sx > sy and sx >= sz then
+        -- rebah ke samping -> rotasi Z 90°: X jadi Y, Y jadi X
+        rotation = CFrame.Angles(0, 0, math.rad(90))
+        finalSize = Vector3.new(sy, sx, sz)
+    elseif sz > sy and sz > sx then
+        -- rebah ke depan -> rotasi X 90°: Z jadi Y, Y jadi Z
+        rotation = CFrame.Angles(math.rad(90), 0, 0)
+        finalSize = Vector3.new(sx, sz, sy)
+    end
+
+    return rotation, finalSize
 end
 
 --====================================================
@@ -253,11 +275,14 @@ local function scanMyProps()
         seen[obj] = true
 
         local size, center = measureProp(obj)
+        local standRot, finalSize = computeStandRotation(size)
         table.insert(myProps, {
             object = obj,
             remote = remote,
             size = size,
             center = center,
+            standRotation = standRot,
+            finalSize = finalSize,
         })
     end
 
@@ -272,22 +297,31 @@ local function scanMyProps()
         return a.object.Name:lower() < b.object.Name:lower()
     end)
 
-    -- tampilkan di list
     for _, child in ipairs(listFrame:GetChildren()) do
         if child:IsA("TextLabel") then child:Destroy() end
     end
 
     local totalWidth = 0
+    local standCount = 0
     for i, data in ipairs(myProps) do
         local s = data.size
-        totalWidth = totalWidth + s.X
+        local fs = data.finalSize
+        totalWidth = totalWidth + fs.X
+        local isStanding = data.standRotation ~= CFrame.new()
+        if isStanding then standCount += 1 end
+
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, -8, 0, 34)
+        lbl.Size = UDim2.new(1, -8, 0, 40)
         lbl.LayoutOrder = i
-        lbl.BackgroundColor3 = Color3.fromRGB(50, 54, 73)
+        lbl.BackgroundColor3 = isStanding
+            and Color3.fromRGB(60, 80, 55)
+            or Color3.fromRGB(50, 54, 73)
         lbl.Text = string.format(
-            " %d. %s\n   X=%.1f Y=%.1f Z=%.1f",
-            i, data.object.Name, s.X, s.Y, s.Z
+            " %d. %s%s\n   asli X=%.1f Y=%.1f Z=%.1f\n   pakai X=%.1f Y=%.1f",
+            i, data.object.Name,
+            isStanding and "  [BERDIRI]" or "",
+            s.X, s.Y, s.Z,
+            fs.X, fs.Y
         )
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.TextYAlignment = Enum.TextYAlignment.Top
@@ -298,15 +332,18 @@ local function scanMyProps()
         round(lbl, 4)
     end
 
-    listFrame.CanvasSize = UDim2.fromOffset(0, #myProps * 37 + 6)
-    info.Text = string.format("Prop: %d | Total lebar X: %.1f", #myProps, totalWidth)
+    listFrame.CanvasSize = UDim2.fromOffset(0, #myProps * 43 + 6)
+    info.Text = string.format(
+        "Prop: %d | Berdiri: %d | Lebar total: %.1f",
+        #myProps, standCount, totalWidth
+    )
 
     if #myProps == 0 then
         setStatus("Tidak ada prop milikmu. Spawn prop manual dahulu.")
     else
         setStatus(string.format(
-            "Ditemukan %d prop. Tekan SUSUN BERJEJER untuk menata.",
-            #myProps
+            "Ditemukan %d prop (%d otomatis berdiri). Tekan SUSUN BERJEJER.",
+            #myProps, standCount
         ))
     end
 end
@@ -315,8 +352,8 @@ listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
 
 --====================================================
 -- SUSUN BERJEJER
--- Prop diletakkan berjejer di depan player (sumbu X lokal),
--- dengan jarak = gap, dihitung dari ukuran asli tiap prop.
+-- Posisi & lebar pakai finalSize (ukuran setelah rotasi).
+-- GoalCF = posisi * rotasi player * rotasi berdiri prop.
 --====================================================
 local function stopLayout()
     layoutRunning = false
@@ -344,38 +381,40 @@ local function startLayout()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return end
 
-        -- hitung total lebar termasuk gap
+        -- total lebar pakai finalSize
         local totalWidth = 0
         for i, data in ipairs(myProps) do
-            totalWidth = totalWidth + data.size.X
+            totalWidth = totalWidth + data.finalSize.X
             if i < #myProps then totalWidth = totalWidth + gap end
         end
 
-        -- mulai dari kiri
         local cursor = -totalWidth * 0.5
         local baseCF = root.CFrame
 
         local okCount, errCount = 0, 0
         for _, data in ipairs(myProps) do
-            local s = data.size
-            local localX = cursor + s.X * 0.5
-            local localY = heightOffset + s.Y * 0.5
-            local localPos = Vector3.new(localX, localY, -8) -- 8 stud di depan player
+            local fs = data.finalSize
+            local localX = cursor + fs.X * 0.5
+            -- pakai tinggi setelah rotasi (finalSize.Y)
+            local localY = heightOffset + fs.Y * 0.5
+            local localPos = Vector3.new(localX, localY, -8)
             local worldPos = baseCF * localPos
 
-            -- orientasi ikut player (depan player = -Z lokal)
-            local goalCF = CFrame.new(worldPos) * baseCF.Rotation
+            -- rotasi player + rotasi berdiri prop
+            local goalCF = CFrame.new(worldPos)
+                * baseCF.Rotation
+                * data.standRotation
 
             local ok = pcall(function()
                 data.remote:InvokeServer(goalCF)
             end)
             if ok then okCount += 1 else errCount += 1 end
 
-            cursor = cursor + s.X + gap
+            cursor = cursor + fs.X + gap
         end
 
         setStatus(string.format(
-            "Layout ON | OK: %d | Err: %d | total lebar: %.1f",
+            "Layout ON | OK: %d | Err: %d | lebar: %.1f",
             okCount, errCount, totalWidth
         ))
     end))
