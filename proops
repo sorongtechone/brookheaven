@@ -1,7 +1,13 @@
 --====================================================
--- XLORD PROP MEASURE & HUMAN LAYOUT
--- Scan prop -> ukur -> auto-berdiri -> susun jadi bentuk orang.
--- Tanpa ekor, tanpa sayap, tanpa tanduk.
+-- XLORD PROP MEASURE & HUMAN LAYOUT (15 slot)
+-- Scan prop -> ukur -> auto-berdiri -> susun jadi orang.
+-- Pembagian slot:
+--   Tangan kiri  : 3 prop
+--   Tangan kanan : 3 prop
+--   Kaki kiri    : 2 prop
+--   Kaki kanan   : 2 prop
+--   Badan+Kepala : 5 prop (sisa)
+-- Total: 15 slot. Tanpa ekor, tanpa sayap, tanpa tanduk.
 --====================================================
 
 local Players = game:GetService("Players")
@@ -77,7 +83,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "PROP MEASURE | HUMAN"
+header.Text = "PROP MEASURE | HUMAN (15)"
 header.Position = UDim2.fromOffset(10, 0)
 header.Size = UDim2.fromOffset(250, 40)
 header.TextXAlignment = Enum.TextXAlignment.Left
@@ -130,9 +136,9 @@ local function makeField(labelText, defaultText, x, y, w)
     return box
 end
 
-local scaleBox   = makeField("Skala tubuh:", "2", 10, 126, 92)
-local gapBox     = makeField("Celah antar prop:", "0.5", 110, 126, 92)
-local distBox    = makeField("Jarak ke kamu:", "8", 210, 126, 92)
+local scaleBox = makeField("Skala tubuh:", "2", 10, 126, 92)
+local gapBox   = makeField("Celah antar prop:", "0.5", 110, 126, 92)
+local distBox  = makeField("Jarak ke kamu:", "8", 210, 126, 92)
 
 local info = Instance.new("TextLabel")
 info.Name = "Info"
@@ -182,7 +188,7 @@ end
 -- STATE
 --====================================================
 local myProps = {}        -- {object, remote, size, center, standRotation, finalSize}
-local assignedSlots = {}  -- {prop data, localPos, localRot}
+local assignedSlots = {}  -- {prop data, slotName, localPos, localRot}
 local layoutRunning = false
 local layoutToken = 0
 
@@ -343,50 +349,49 @@ end
 listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
 
 --====================================================
--- BENTUK ORANG (HUMANOID LAYOUT)
--- Proporsi berdasarkan tinggi rata-rata prop.
--- Setiap slot dideskripsikan sebagai:
---   {name, x, y (dalam "unit tubuh"), rotZ, rotX}
--- Lalu posisi dikalikan ukuran tubuh aktual.
--- Tanpa ekor/sayap/tanduk.
+-- SKELETON ORANG (TEPAT 15 SLOT)
+-- urutan:
+--   1..3   : tangan kiri (3)
+--   4..6   : tangan kanan (3)
+--   7..8   : kaki kiri (2)
+--   9..10  : kaki kanan (2)
+--   11..15 : badan + kepala (5)
+--
+-- x, y = posisi dalam "unit tubuh":
+--   x = -1 (kiri) sampai +1 (kanan)
+--   y = 0 (kaki) sampai 1 (ujung kepala)
+-- rotZ = kemiringan prop terhadap sumbu Z (derajat)
 --====================================================
 local function buildHumanSkeleton()
-    -- "unit" = tinggi tubuh manusia (kepala sampai kaki)
-    -- y dari 0 (kaki) sampai 1 (ujung kepala)
     local S = {}
 
-    -- Kepala
-    table.insert(S, { name = "Kepala",      x = 0,     y = 1.00, rotZ = 0,   rotX = 0 })
-    -- Leher (opsional, kalau prop cukup)
-    table.insert(S, { name = "Leher",       x = 0,     y = 0.88, rotZ = 0,   rotX = 0 })
-    -- Badan (dari bawah ke atas)
-    table.insert(S, { name = "Badan Bawah", x = 0,     y = 0.55, rotZ = 0,   rotX = 0 })
-    table.insert(S, { name = "Badan Tengah",x = 0,     y = 0.70, rotZ = 0,   rotX = 0 })
-    table.insert(S, { name = "Badan Atas",  x = 0,     y = 0.82, rotZ = 0,   rotX = 0 })
-    -- Bahu kiri/kanan
-    table.insert(S, { name = "Bahu Kiri",   x = -0.30, y = 0.82, rotZ =  15, rotX = 0 })
-    table.insert(S, { name = "Bahu Kanan",  x =  0.30, y = 0.82, rotZ = -15, rotX = 0 })
-    -- Lengan atas
-    table.insert(S, { name = "Lengan Atas Kiri",  x = -0.42, y = 0.70, rotZ =  40, rotX = 0 })
-    table.insert(S, { name = "Lengan Atas Kanan", x =  0.42, y = 0.70, rotZ = -40, rotX = 0 })
-    -- Lengan bawah
-    table.insert(S, { name = "Lengan Bawah Kiri",  x = -0.52, y = 0.55, rotZ =  70, rotX = 0 })
-    table.insert(S, { name = "Lengan Bawah Kanan", x =  0.52, y = 0.55, rotZ = -70, rotX = 0 })
-    -- Tangan
-    table.insert(S, { name = "Tangan Kiri",  x = -0.58, y = 0.42, rotZ =  85, rotX = 0 })
-    table.insert(S, { name = "Tangan Kanan", x =  0.58, y = 0.42, rotZ = -85, rotX = 0 })
-    -- Pinggul
-    table.insert(S, { name = "Pinggul Kiri",  x = -0.18, y = 0.48, rotZ = 0, rotX = 0 })
-    table.insert(S, { name = "Pinggul Kanan", x =  0.18, y = 0.48, rotZ = 0, rotX = 0 })
-    -- Paha
-    table.insert(S, { name = "Paha Kiri",  x = -0.18, y = 0.32, rotZ = 0, rotX = 0 })
-    table.insert(S, { name = "Paha Kanan", x =  0.18, y = 0.32, rotZ = 0, rotX = 0 })
-    -- Lutut / betis
-    table.insert(S, { name = "Betis Kiri",  x = -0.18, y = 0.15, rotZ = 0, rotX = 0 })
-    table.insert(S, { name = "Betis Kanan", x =  0.18, y = 0.15, rotZ = 0, rotX = 0 })
-    -- Kaki
-    table.insert(S, { name = "Kaki Kiri",  x = -0.18, y = 0.03, rotZ = 0, rotX = 0 })
-    table.insert(S, { name = "Kaki Kanan", x =  0.18, y = 0.03, rotZ = 0, rotX = 0 })
+    -- ===== TANGAN KIRI (3 prop) =====
+    -- bahu -> lengan atas -> tangan
+    table.insert(S, { name = "Tangan Kiri 1", x = -0.55, y = 0.82, rotZ =  20 })
+    table.insert(S, { name = "Tangan Kiri 2", x = -0.75, y = 0.68, rotZ =  55 })
+    table.insert(S, { name = "Tangan Kiri 3", x = -0.90, y = 0.50, rotZ =  85 })
+
+    -- ===== TANGAN KANAN (3 prop) =====
+    table.insert(S, { name = "Tangan Kanan 1", x =  0.55, y = 0.82, rotZ = -20 })
+    table.insert(S, { name = "Tangan Kanan 2", x =  0.75, y = 0.68, rotZ = -55 })
+    table.insert(S, { name = "Tangan Kanan 3", x =  0.90, y = 0.50, rotZ = -85 })
+
+    -- ===== KAKI KIRI (2 prop) =====
+    -- paha -> kaki
+    table.insert(S, { name = "Kaki Kiri 1", x = -0.18, y = 0.30, rotZ = 0 })
+    table.insert(S, { name = "Kaki Kiri 2", x = -0.18, y = 0.05, rotZ = 0 })
+
+    -- ===== KAKI KANAN (2 prop) =====
+    table.insert(S, { name = "Kaki Kanan 1", x =  0.18, y = 0.30, rotZ = 0 })
+    table.insert(S, { name = "Kaki Kanan 2", x =  0.18, y = 0.05, rotZ = 0 })
+
+    -- ===== BADAN + KEPALA (5 prop) =====
+    -- bawah -> tengah -> atas -> leher -> kepala
+    table.insert(S, { name = "Badan Bawah",  x = 0, y = 0.40, rotZ = 0 })
+    table.insert(S, { name = "Badan Tengah", x = 0, y = 0.55, rotZ = 0 })
+    table.insert(S, { name = "Badan Atas",   x = 0, y = 0.70, rotZ = 0 })
+    table.insert(S, { name = "Leher",        x = 0, y = 0.83, rotZ = 0 })
+    table.insert(S, { name = "Kepala",       x = 0, y = 0.94, rotZ = 0 })
 
     return S
 end
@@ -395,17 +400,32 @@ local HUMAN_SKELETON = buildHumanSkeleton()
 
 --====================================================
 -- ASSIGN SLOT
--- Slot tubuh dipetakan ke prop yang tersedia (urut dari scan).
--- Posisi lokal tiap slot dihitung dari:
---   x * bodyWidth * scale
---   y * bodyHeight * scale
--- Rotasi lokal = rotZ (putar sumbu Z) dan rotX (putar sumbu X).
+-- Prop diurutkan ulang supaya tiap bagian dapat porsi yang pas.
+-- Kalau prop kurang dari 15, slot diisi mulai dari yang paling
+-- penting dulu (badan & kepala), lalu tangan, lalu kaki.
+--
+-- Urutan prioritas pengisian (biar siluet orang langsung kebentuk):
+--   1. Badan (bawah, tengah, atas)
+--   2. Kepala
+--   3. Leher (kalau ada)
+--   4. Tangan kiri & kanan (silih berganti)
+--   5. Kaki kiri & kanan
 --====================================================
+local PRIORITY_ORDER = {
+    "Badan Bawah", "Badan Tengah", "Badan Atas",
+    "Kepala", "Leher",
+    "Tangan Kiri 1", "Tangan Kanan 1",
+    "Tangan Kiri 2", "Tangan Kanan 2",
+    "Tangan Kiri 3", "Tangan Kanan 3",
+    "Kaki Kiri 1", "Kaki Kanan 1",
+    "Kaki Kiri 2", "Kaki Kanan 2",
+}
+
 local function assignSlots(scale, gap)
     assignedSlots = {}
     if #myProps == 0 then return end
 
-    -- ukuran "unit tubuh" = rata-rata finalSize prop
+    -- ukuran tubuh dari rata-rata prop
     local sumY, sumX = 0, 0
     for _, d in ipairs(myProps) do
         sumY = sumY + d.finalSize.Y
@@ -414,37 +434,36 @@ local function assignSlots(scale, gap)
     local avgHeight = sumY / #myProps
     local avgWidth  = sumX / #myProps
 
-    -- bodyHeight = total tinggi tubuh manusia (kepala-kaki) dalam stud
-    -- bodyWidth  = lebar tubuh (bahu ke bahu) dalam stud
-    local bodyHeight = avgHeight * 8 * scale   -- 8 "unit" vertikal
-    local bodyWidth  = avgWidth  * 4 * scale   -- 4 "unit" horizontal
+    -- bodyHeight = tinggi orang (kaki -> kepala) dalam stud
+    -- bodyWidth  = jarak bahu ke bahu dalam stud
+    local bodyHeight = (avgHeight * 8 * scale) + (gap * #myProps)
+    local bodyWidth  = (avgWidth  * 4 * scale) + (gap * 4)
 
-    -- tambah celah antar prop
-    bodyHeight = bodyHeight + gap * #myProps
-    bodyWidth  = bodyWidth  + gap * 4
+    -- peta nama slot -> deskripsi skeleton
+    local byName = {}
+    for _, slot in ipairs(HUMAN_SKELETON) do byName[slot.name] = slot end
 
-    for i, data in ipairs(myProps) do
-        local slot = HUMAN_SKELETON[i]
-        if not slot then break end
-
-        local localPos = Vector3.new(
-            slot.x * bodyWidth,
-            slot.y * bodyHeight,
-            0
-        )
-
-        local localRot = CFrame.Angles(
-            math.rad(slot.rotX),
-            0,
-            math.rad(slot.rotZ)
-        )
-
-        table.insert(assignedSlots, {
-            data = data,
-            name = slot.name,
-            localPos = localPos,
-            localRot = localRot,
-        })
+    -- isi slot sesuai prioritas sampai prop atau slot habis
+    local used = 0
+    for _, slotName in ipairs(PRIORITY_ORDER) do
+        if used >= #myProps then break end
+        used += 1
+        local data = myProps[used]
+        local slot = byName[slotName]
+        if slot then
+            local localPos = Vector3.new(
+                slot.x * bodyWidth,
+                slot.y * bodyHeight,
+                0
+            )
+            local localRot = CFrame.Angles(0, 0, math.rad(slot.rotZ))
+            table.insert(assignedSlots, {
+                data = data,
+                name = slotName,
+                localPos = localPos,
+                localRot = localRot,
+            })
+        end
     end
 
     info.Text = string.format(
@@ -491,7 +510,6 @@ local function startLayout()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return end
 
-        -- pusat tubuh di belakang player
         local back = root.CFrame.LookVector * -dist
         local centerPos = root.Position + back
         local centerCF = CFrame.new(centerPos, centerPos + root.CFrame.LookVector)
@@ -502,7 +520,6 @@ local function startLayout()
             local remote = data.remote
             if remote and remote.Parent and remote:IsA("RemoteFunction") then
                 local worldPos = centerCF * slot.localPos
-                -- rotasi: pusat -> rotasi lokal slot -> rotasi berdiri prop
                 local goalCF = CFrame.new(worldPos)
                     * centerCF.Rotation
                     * slot.localRot
@@ -568,4 +585,4 @@ gui.Destroying:Connect(function()
 end)
 
 setStatus("Siap | Tekan SCAN & UKUR PROP SAYA")
-print("[XLORD Prop Measure | Human] Loaded")
+print("[XLORD Prop Measure | Human 15] Loaded")
