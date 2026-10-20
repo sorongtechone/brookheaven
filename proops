@@ -1,4 +1,8 @@
-
+--====================================================
+-- XLORD GIANT MONSTER | PROP ASSEMBLY
+-- Gabungkan semua prop milikmu jadi monster raksasa.
+-- Prop disusun jadi tubuh monster, grup bergerak mengikuti kamu.
+--====================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -64,7 +68,7 @@ local main = Instance.new("Frame")
 main.Name = "Main"
 main.AnchorPoint = Vector2.new(0, 0)
 main.Position = UDim2.fromOffset(20, 20)
-main.Size = UDim2.fromOffset(320, 560)
+main.Size = UDim2.fromOffset(310, 460)
 main.BackgroundColor3 = COLORS.panel
 main.BackgroundTransparency = 0.1
 main.BorderSizePixel = 0
@@ -75,41 +79,31 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "GIANT MONSTER | v3 AUTO-SPACE"
+header.Text = "GIANT MONSTER | PROP"
 header.Position = UDim2.fromOffset(10, 0)
-header.Size = UDim2.fromOffset(260, 40)
+header.Size = UDim2.fromOffset(230, 40)
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
-header.TextSize = 13
+header.TextSize = 14
 header.Font = Enum.Font.GothamBold
 header.Active = true
 header.Parent = main
 
 local closeBtn = button(main, "Close", "X", COLORS.red)
 closeBtn.Size = UDim2.fromOffset(28, 28)
-closeBtn.Position = UDim2.fromOffset(282, 6)
+closeBtn.Position = UDim2.fromOffset(272, 6)
 
-local scanBtn = button(main, "Scan", "SCAN + UKUR PROP SAYA", COLORS.purple)
+local scanBtn = button(main, "Scan", "SCAN SEMUA PROP SAYA", COLORS.purple)
 scanBtn.Position = UDim2.fromOffset(10, 46)
-scanBtn.Size = UDim2.fromOffset(300, 32)
+scanBtn.Size = UDim2.fromOffset(290, 32)
 
 local followBtn = button(main, "Follow", "FOLLOW SAYA: OFF", COLORS.green)
 followBtn.Position = UDim2.fromOffset(10, 84)
-followBtn.Size = UDim2.fromOffset(145, 34)
+followBtn.Size = UDim2.fromOffset(140, 34)
 
 local attackBtn = button(main, "Attack", "KEJAR TARGET: OFF", COLORS.orange)
-attackBtn.Position = UDim2.fromOffset(165, 84)
-attackBtn.Size = UDim2.fromOffset(145, 34)
-
-local straightenBtn = button(main, "Straighten", "LURUSKAN: ON", COLORS.blue)
-straightenBtn.Position = UDim2.fromOffset(10, 126)
-straightenBtn.Size = UDim2.fromOffset(300, 30)
-local straightenEnabled = true
-
-local autoSpaceBtn = button(main, "AutoSpace", "AUTO-SPACE: ON", COLORS.blue)
-autoSpaceBtn.Position = UDim2.fromOffset(10, 162)
-autoSpaceBtn.Size = UDim2.fromOffset(300, 30)
-local autoSpaceEnabled = true
+attackBtn.Position = UDim2.fromOffset(160, 84)
+attackBtn.Size = UDim2.fromOffset(140, 34)
 
 -- Parameter
 local function makeField(labelText, defaultText, x, y, w)
@@ -138,28 +132,16 @@ local function makeField(labelText, defaultText, x, y, w)
     return box
 end
 
-local scaleBox  = makeField("Skala monster:", "5", 10, 200, 96)
-local distBox   = makeField("Jarak ke kamu:", "12", 116, 200, 96)
-local heightBox = makeField("Tinggi:", "2", 222, 200, 88)
-
-local spaceMulBox = makeField("Pengali spasi:", "1.2", 10, 250, 140)
-local measureInfo = Instance.new("TextLabel")
-measureInfo.BackgroundTransparency = 1
-measureInfo.Text = "Ukuran terbesar: -"
-measureInfo.Position = UDim2.fromOffset(160, 267)
-measureInfo.Size = UDim2.fromOffset(150, 26)
-measureInfo.TextXAlignment = Enum.TextXAlignment.Left
-measureInfo.TextColor3 = Color3.fromRGB(160, 220, 255)
-measureInfo.TextSize = 11
-measureInfo.Font = Enum.Font.Gotham
-measureInfo.Parent = main
+local scaleBox  = makeField("Skala monster:", "3", 10, 126, 92)
+local distBox   = makeField("Jarak ke kamu:", "8", 110, 126, 92)
+local heightBox = makeField("Tinggi:", "2", 210, 126, 92)
 
 local info = Instance.new("TextLabel")
 info.Name = "Info"
 info.BackgroundTransparency = 1
-info.Text = "Prop: 0 | Slot: 0/9"
-info.Position = UDim2.fromOffset(10, 282)
-info.Size = UDim2.fromOffset(300, 20)
+info.Text = "Prop: 0 | Slot tubuh: 0"
+info.Position = UDim2.fromOffset(10, 176)
+info.Size = UDim2.fromOffset(290, 20)
 info.TextXAlignment = Enum.TextXAlignment.Left
 info.TextColor3 = Color3.fromRGB(140, 205, 255)
 info.TextSize = 12
@@ -170,8 +152,8 @@ local listFrame = Instance.new("ScrollingFrame")
 listFrame.Name = "PropList"
 listFrame.BackgroundColor3 = COLORS.list
 listFrame.BorderSizePixel = 0
-listFrame.Position = UDim2.fromOffset(10, 306)
-listFrame.Size = UDim2.fromOffset(300, 190)
+listFrame.Position = UDim2.fromOffset(10, 200)
+listFrame.Size = UDim2.fromOffset(290, 190)
 listFrame.ScrollBarThickness = 4
 listFrame.CanvasSize = UDim2.fromOffset(0, 0)
 listFrame.Parent = main
@@ -185,8 +167,8 @@ local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
 status.Text = "Siap | Scan prop dulu"
-status.Position = UDim2.fromOffset(10, 502)
-status.Size = UDim2.fromOffset(300, 52)
+status.Position = UDim2.fromOffset(10, 396)
+status.Size = UDim2.fromOffset(290, 56)
 status.TextWrapped = true
 status.TextXAlignment = Enum.TextXAlignment.Left
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
@@ -198,76 +180,15 @@ local function setStatus(msg)
     if gui.Parent then status.Text = tostring(msg) end
 end
 
-listen(straightenBtn.MouseButton1Click:Connect(function()
-    straightenEnabled = not straightenEnabled
-    straightenBtn.Text = straightenEnabled and "LURUSKAN: ON" or "LURUSKAN: OFF"
-    straightenBtn.BackgroundColor3 = straightenEnabled and COLORS.blue or COLORS.gray
-end))
-
-listen(autoSpaceBtn.MouseButton1Click:Connect(function()
-    autoSpaceEnabled = not autoSpaceEnabled
-    autoSpaceBtn.Text = autoSpaceEnabled and "AUTO-SPACE: ON" or "AUTO-SPACE: OFF"
-    autoSpaceBtn.BackgroundColor3 = autoSpaceEnabled and COLORS.blue or COLORS.gray
-    setStatus(autoSpaceEnabled and "Spasi otomatis dari ukuran prop" or "Spasi pakai nilai manual")
-end))
-
 --====================================================
 -- STATE
 --====================================================
 local myProps = {}
-local assignedSlots = {}
+local assignedSlots = {}   -- {prop, remote, offset Local}
 local followRunning = false
 local attackRunning = false
 local followToken = 0
 local propConnections = {}
-local animPhase = 0
-
--- Hasil pengukuran
-local maxPropSize = 1     -- ukuran terbesar (studs) dari semua prop
-local avgPropSize = 1     -- rata-rata ukuran
-local spaceUnit = 1       -- spasi dasar hasil ukur (dipakai skeleton)
-
---====================================================
--- PENGUKURAN PROP
---====================================================
-local function measureObject(obj)
-    -- return Vector3 ukuran (X, Y, Z)
-    local ok, size = pcall(function()
-        if obj:IsA("Model") then
-            local _, sz = obj:GetBoundingBox()
-            return sz
-        elseif obj:IsA("BasePart") then
-            return obj.Size
-        end
-        return Vector3.new(1, 1, 1)
-    end)
-    if ok and typeof(size) == "Vector3" then
-        return size
-    end
-    return Vector3.new(1, 1, 1)
-end
-
-local function measureAllProps()
-    local maxSize = 0
-    local sum = 0
-    local count = 0
-    local maxDim = 0
-    for _, data in ipairs(myProps) do
-        local sz = measureObject(data.object)
-        data.size = sz
-        local biggest = math.max(sz.X, sz.Y, sz.Z)
-        maxSize = math.max(maxSize, biggest)
-        sum += biggest
-        count += 1
-    end
-    maxPropSize = maxSize > 0 and maxSize or 1
-    avgPropSize = count > 0 and (sum / count) or 1
-    -- spasi dasar: pakai ukuran rata-rata (biar prop kecil tidak terlalu jauh)
-    -- dikali 0.6 supaya sedikit menempel tapi tidak tumpang tindih
-    spaceUnit = math.max(avgPropSize * 0.6, 1)
-    measureInfo.Text = string.format("Terbesar: %.1f | Rata²: %.1f | Spasi: %.1f",
-        maxPropSize, avgPropSize, spaceUnit)
-end
 
 --====================================================
 -- SCAN PROP
@@ -308,151 +229,115 @@ local function scanMyProps()
         return a.object.Name:lower() < b.object.Name:lower()
     end)
 
-    -- UKUR SEMUA PROP DULU
-    measureAllProps()
-
-    -- tampilkan list dengan ukuran
     for _, child in ipairs(listFrame:GetChildren()) do
         if child:IsA("TextLabel") then child:Destroy() end
     end
     for i, data in ipairs(myProps) do
-        local sz = data.size or Vector3.new(1,1,1)
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(1, -8, 0, 22)
         lbl.LayoutOrder = i
         lbl.BackgroundColor3 = Color3.fromRGB(50, 54, 73)
-        lbl.Text = string.format(" %d. %s  [%.1f×%.1f×%.1f]",
-            i, data.object.Name, sz.X, sz.Y, sz.Z)
+        lbl.Text = " " .. i .. ". " .. data.object.Name
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.TextColor3 = Color3.new(1, 1, 1)
-        lbl.TextSize = 10
+        lbl.TextSize = 11
         lbl.Font = Enum.Font.Gotham
         lbl.Parent = listFrame
         round(lbl, 4)
     end
     listFrame.CanvasSize = UDim2.fromOffset(0, #myProps * 25 + 6)
-    info.Text = "Prop: " .. #myProps .. " | Slot: 0/9"
+    info.Text = "Prop: " .. #myProps .. " | Slot tubuh: 0"
     setStatus(#myProps > 0
-        and ("Ditemukan " .. #myProps .. " prop & diukur. Atur skala lalu FOLLOW.")
+        and ("Ditemukan " .. #myProps .. " prop. Atur skala lalu FOLLOW.")
         or "Tidak ada prop milikmu. Spawn prop manual dahulu.")
 end
 
 listen(scanBtn.MouseButton1Click:Connect(scanMyProps))
 
 --====================================================
--- ASSIGN SLOT
+-- SKELETON MONSTER (slot tubuh dalam unit lokal)
+-- Koordinat lokal: X = kanan/kiri, Y = atas/bawah, Z = depan/belakang
+-- (dikalikan skala saat dipakai)
 --====================================================
-local function assignSlots()
-    assignedSlots = {}
-    local cursor = 1
-    local function take(n, part)
-        local arr = {}
-        for k = 1, n do
-            local data = myProps[cursor]
-            if not data then break end
-            table.insert(arr, { object = data.object, remote = data.remote,
-                part = part, index = k, size = data.size })
-            cursor += 1
-        end
-        return arr
+local function buildSkeleton()
+    local S = {}
+    -- Kepala (1 prop)
+    table.insert(S, Vector3.new(0, 8, 0))
+    -- Badan (tumpuk vertikal)
+    table.insert(S, Vector3.new(0, 6, 0))
+    table.insert(S, Vector3.new(0, 4.5, 0))
+    table.insert(S, Vector3.new(0, 3, 0))
+    -- Tangan kiri
+    table.insert(S, Vector3.new(-3, 5.5, 0))
+    table.insert(S, Vector3.new(-5, 4.5, 0))
+    table.insert(S, Vector3.new(-7, 3.5, 0))
+    -- Tangan kanan
+    table.insert(S, Vector3.new(3, 5.5, 0))
+    table.insert(S, Vector3.new(5, 4.5, 0))
+    table.insert(S, Vector3.new(7, 3.5, 0))
+    -- Kaki kiri
+    table.insert(S, Vector3.new(-1.8, 1.5, 0))
+    table.insert(S, Vector3.new(-1.8, 0, 0))
+    -- Kaki kanan
+    table.insert(S, Vector3.new(1.8, 1.5, 0))
+    table.insert(S, Vector3.new(1.8, 0, 0))
+    -- Ekor (ke belakang)
+    table.insert(S, Vector3.new(0, 2, 3))
+    table.insert(S, Vector3.new(0, 1.5, 5))
+    table.insert(S, Vector3.new(0, 1, 7))
+    -- Sayap kiri
+    table.insert(S, Vector3.new(-6, 7, -2))
+    table.insert(S, Vector3.new(-9, 8, -3))
+    -- Sayap kanan
+    table.insert(S, Vector3.new(6, 7, -2))
+    table.insert(S, Vector3.new(9, 8, -3))
+    -- Tanduk
+    table.insert(S, Vector3.new(-1.5, 10, 0))
+    table.insert(S, Vector3.new(1.5, 10, 0))
+    -- Tambahan (kalau prop lebih banyak)
+    for i = 1, 30 do
+        local angle = i * 1.1
+        table.insert(S, Vector3.new(
+            math.cos(angle) * 6,
+            5 + math.sin(angle) * 3,
+            math.sin(angle) * 6
+        ))
     end
-
-    local head  = take(1, "head")
-    local body  = take(1, "body")
-    local armL  = take(3, "armL")
-    local armR  = take(3, "armR")
-    local legL  = take(2, "legL")
-    local legR  = take(2, "legR")
-
-    for _, list in ipairs({head, body, armL, armR, legL, legR}) do
-        for _, slot in ipairs(list) do table.insert(assignedSlots, slot) end
-    end
-
-    local auraIndex = 1
-    while myProps[cursor] do
-        local data = myProps[cursor]
-        table.insert(assignedSlots, {
-            object = data.object, remote = data.remote,
-            part = "aura", index = auraIndex, size = data.size,
-        })
-        auraIndex += 1
-        cursor += 1
-    end
-
-    info.Text = "Prop: " .. #myProps .. " | Slot: " .. #assignedSlots
+    return S
 end
 
-listen(scanBtn.MouseButton1Click:Connect(function()
-    task.defer(assignSlots)
-end))
+local SKELETON = buildSkeleton()
 
---====================================================
--- POSISI LOKAL (pakai spaceUnit hasil ukur)
---====================================================
-local function slotLocalPos(slot, scale, phase)
-    local p = slot.part
-    local i = slot.index
-    local sp = spaceUnit  -- satuan spasi dari pengukuran
-
-    if p == "head" then
-        return Vector3.new(0, 9 * sp, 0) * scale
-    elseif p == "body" then
-        return Vector3.new(0, 5 * sp, 0) * scale
-    elseif p == "armL" then
-        local swing = math.sin(phase) * 0.6 * sp
-        local base = Vector3.new(-3 * sp - i * 1.2 * sp,
-            6 * sp - i * 1.5 * sp + swing, 0)
-        return base * scale
-    elseif p == "armR" then
-        local swing = math.sin(phase + math.pi) * 0.6 * sp
-        local base = Vector3.new(3 * sp + i * 1.2 * sp,
-            6 * sp - i * 1.5 * sp + swing, 0)
-        return base * scale
-    elseif p == "legL" then
-        local swing = math.sin(phase) * 0.4 * sp
-        local base = Vector3.new(-1.8 * sp, 3 * sp - i * 1.4 * sp, swing)
-        return base * scale
-    elseif p == "legR" then
-        local swing = math.sin(phase + math.pi) * 0.4 * sp
-        local base = Vector3.new(1.8 * sp, 3 * sp - i * 1.4 * sp, swing)
-        return base * scale
-    elseif p == "aura" then
-        local angle = i * 1.3 + phase * 0.5
-        local radius = 7 * sp
-        local base = Vector3.new(
-            math.cos(angle) * radius,
-            5 * sp + math.sin(angle * 2) * 1.5 * sp,
-            math.sin(angle) * radius
-        )
-        return base * scale
+local function assignSlots()
+    assignedSlots = {}
+    for i, data in ipairs(myProps) do
+        local offset = SKELETON[i]
+        if not offset then
+            -- fallback: lingkaran di sekitar badan
+            local angle = i * 1.3
+            offset = Vector3.new(math.cos(angle) * 8, 3, math.sin(angle) * 8)
+        end
+        table.insert(assignedSlots, {
+            object = data.object,
+            remote = data.remote,
+            offset = offset,
+        })
     end
-    return Vector3.zero
+    info.Text = "Prop: " .. #myProps .. " | Slot tubuh: " .. #assignedSlots
 end
 
 --====================================================
 -- UPDATE MONSTER
 --====================================================
-local function updateMonster(centerCF, scale, heightOffset, phase)
+local function updateMonster(centerCF, scale, heightOffset)
     local okCount, errCount = 0, 0
     for _, slot in ipairs(assignedSlots) do
         local obj = slot.object
         local remote = slot.remote
         if obj and obj.Parent and remote and remote.Parent and remote:IsA("RemoteFunction") then
-            local localPos = slotLocalPos(slot, scale, phase) + Vector3.new(0, heightOffset, 0)
+            local localPos = slot.offset * scale + Vector3.new(0, heightOffset, 0)
             local worldPos = centerCF * localPos
-
-            local goalCF
-            if straightenEnabled then
-                goalCF = CFrame.new(worldPos) * centerCF.Rotation
-            else
-                local okRot, origCF = pcall(function() return obj:GetPivot() end)
-                if okRot then
-                    goalCF = CFrame.new(worldPos) * origCF.Rotation
-                else
-                    goalCF = CFrame.new(worldPos) * centerCF.Rotation
-                end
-            end
-
+            local goalCF = CFrame.new(worldPos) * centerCF.Rotation
             local ok = pcall(function() remote:InvokeServer(goalCF) end)
             if ok then okCount += 1 else errCount += 1 end
         else
@@ -481,14 +366,9 @@ local function startFollow()
     if #myProps == 0 then setStatus("Scan prop dulu.") return end
     if #assignedSlots == 0 then assignSlots() end
 
-    -- kalau auto-space OFF, spaceUnit = 1 (manual)
-    if not autoSpaceEnabled then spaceUnit = 1 end
-
-    local scale = math.clamp(tonumber(scaleBox.Text) or 5, 0.5, 50)
-    local distance = math.clamp(tonumber(distBox.Text) or 12, 2, 120)
-    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -20, 100)
-    local spaceMul = math.clamp(tonumber(spaceMulBox.Text) or 1.2, 0.2, 5)
-    if autoSpaceEnabled then spaceUnit = spaceUnit * spaceMul end
+    local scale = math.clamp(tonumber(scaleBox.Text) or 3, 0.5, 20)
+    local distance = math.clamp(tonumber(distBox.Text) or 8, 2, 60)
+    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -10, 40)
 
     attackRunning = false
     attackBtn.Text = "KEJAR TARGET: OFF"
@@ -498,11 +378,10 @@ local function startFollow()
     local myToken = followToken
     followBtn.Text = "FOLLOW SAYA: ON"
     followBtn.BackgroundColor3 = COLORS.red
-    setStatus(string.format("Monster ON | skala %.1f | spasi %.1f", scale, spaceUnit))
+    setStatus("Monster mengikuti kamu | skala " .. scale)
 
     local lastStatusTime = 0
-    animPhase = 0
-    listen(RunService.Heartbeat:Connect(function(dt)
+    listen(RunService.Heartbeat:Connect(function()
         if not followRunning or followToken ~= myToken then return end
         if not gui.Parent then stopAll() return end
 
@@ -516,16 +395,14 @@ local function startFollow()
             return
         end
 
-        animPhase += dt * 4
-
+        -- posisi monster di belakang player
         local back = root.CFrame.LookVector * -distance
         local centerPos = root.Position + back
         local centerCF = CFrame.new(centerPos, centerPos + root.CFrame.LookVector)
-        local okCount, errCount = updateMonster(centerCF, scale, heightOffset, animPhase)
+        local okCount, errCount = updateMonster(centerCF, scale, heightOffset)
 
         if os.clock() - lastStatusTime > 0.5 then
-            setStatus(string.format("Monster ON | spasi %.1f | OK: %d | Err: %d",
-                spaceUnit, okCount, errCount))
+            setStatus(string.format("Monster ON | OK: %d | Err: %d", okCount, errCount))
             lastStatusTime = os.clock()
         end
     end))
@@ -537,6 +414,7 @@ local function startAttack()
     if #assignedSlots == 0 then assignSlots() end
 
     local target = nil
+    -- target = pemain terdekat selain diri sendiri
     local myChar = localPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local myPos = myRoot and myRoot.Position or Vector3.zero
@@ -553,12 +431,9 @@ local function startAttack()
     end
     if not target then setStatus("Tidak ada target lain di server.") return end
 
-    if not autoSpaceEnabled then spaceUnit = 1 end
-    local scale = math.clamp(tonumber(scaleBox.Text) or 5, 0.5, 50)
-    local distance = math.clamp(tonumber(distBox.Text) or 12, 2, 120)
-    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -20, 100)
-    local spaceMul = math.clamp(tonumber(spaceMulBox.Text) or 1.2, 0.2, 5)
-    if autoSpaceEnabled then spaceUnit = spaceUnit * spaceMul end
+    local scale = math.clamp(tonumber(scaleBox.Text) or 3, 0.5, 20)
+    local distance = math.clamp(tonumber(distBox.Text) or 8, 2, 60)
+    local heightOffset = math.clamp(tonumber(heightBox.Text) or 2, -10, 40)
 
     followRunning = false
     followBtn.Text = "FOLLOW SAYA: OFF"
@@ -571,8 +446,7 @@ local function startAttack()
     setStatus("Monster mengejar @" .. target.Name)
 
     local lastStatusTime = 0
-    animPhase = 0
-    listen(RunService.Heartbeat:Connect(function(dt)
+    listen(RunService.Heartbeat:Connect(function()
         if not attackRunning or followToken ~= myToken then return end
         if not gui.Parent then stopAll() return end
         if target.Parent ~= Players then stopAll(); setStatus("Target keluar.") return end
@@ -588,16 +462,15 @@ local function startAttack()
             return
         end
 
-        animPhase += dt * 6
-
+        -- monster berdiri di belakang target
         local back = tRoot.CFrame.LookVector * -distance
         local centerPos = tRoot.Position + back
         local centerCF = CFrame.new(centerPos, tRoot.Position)
-        local okCount, errCount = updateMonster(centerCF, scale, heightOffset, animPhase)
+        local okCount, errCount = updateMonster(centerCF, scale, heightOffset)
 
         if os.clock() - lastStatusTime > 0.5 then
-            setStatus(string.format("Kejar @%s | spasi %.1f | OK: %d | Err: %d",
-                target.Name, spaceUnit, okCount, errCount))
+            setStatus(string.format("Kejar @%s | OK: %d | Err: %d",
+                target.Name, okCount, errCount))
             lastStatusTime = os.clock()
         end
     end))
@@ -608,6 +481,11 @@ listen(followBtn.MouseButton1Click:Connect(function()
 end))
 listen(attackBtn.MouseButton1Click:Connect(function()
     if attackRunning then stopAll() else startAttack() end
+end))
+
+-- Assign slot otomatis setiap kali scan
+listen(scanBtn.MouseButton1Click:Connect(function()
+    task.defer(assignSlots)
 end))
 
 --====================================================
@@ -652,5 +530,5 @@ gui.Destroying:Connect(function()
     table.clear(connections)
 end)
 
-setStatus("Siap | Tekan SCAN + UKUR PROP SAYA")
-print("[XLORD Giant Monster v3 | Auto-Measure] Loaded")
+setStatus("Siap | Tekan SCAN SEMUA PROP SAYA")
+print("[XLORD Giant Monster] Loaded")
