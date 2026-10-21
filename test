@@ -1,125 +1,113 @@
-
--- BROOKHAVEN AVATAR INSPECTOR
--- Player selector + Avatar IDs + All Parts + Accessories + Final Status
--- Scroll diperbaiki menggunakan AutomaticCanvasSize dan AutomaticSize
+-- BROOKHAVEN AVATAR INSPECTOR (REWRITE)
+-- Fix: ID 0 ditampilkan sebagai "0 (tidak diset)", scan di-yield per bagian,
+-- scroll pakai AutomaticCanvasSize saja, layout rapi.
 
 local Players = game:GetService("Players")
-local TextService = game:GetService("TextService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
--- Hapus GUI versi lama
-local oldGui = game:GetService("CoreGui"):FindFirstChild("AvatarInspectorFull")
-if oldGui then
-    oldGui:Destroy()
+-- ===== Bersihkan GUI lama =====
+local old = CoreGui:FindFirstChild("AvatarInspectorFull")
+if old then old:Destroy() end
+local old2 = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("AvatarInspectorFull")
+if old2 then old2:Destroy() end
+
+-- ===== Helpers =====
+local function create(class, props, parent)
+    local o = Instance.new(class)
+    for k, v in pairs(props or {}) do o[k] = v end
+    o.Parent = parent
+    return o
 end
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "AvatarInspectorFull"
-gui.ResetOnSpawn = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-pcall(function()
-    gui.Parent = game:GetService("CoreGui")
-end)
-
-if not gui.Parent then
-    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+local function corner(o, r)
+    create("UICorner", { CornerRadius = UDim.new(0, r or 8) }, o)
 end
 
-local function create(className, props, parent)
-    local obj = Instance.new(className)
-    for k, v in pairs(props or {}) do
-        obj[k] = v
-    end
-    obj.Parent = parent
-    return obj
+local function stroke(o, c, t)
+    create("UIStroke", { Color = c or Color3.fromRGB(65, 75, 95), Thickness = t or 1 }, o)
 end
 
-local function corner(obj, radius)
-    create("UICorner", {
-        CornerRadius = UDim.new(0, radius or 8)
-    }, obj)
+local function fmtId(v)
+    if v == nil then return "N/A" end
+    if typeof(v) == "number" and v == 0 then return "0 (tidak diset)" end
+    local s = tostring(v)
+    if s == "" or s == "0" then return "0 (tidak diset)" end
+    return s
 end
 
-local function stroke(obj, color, thickness)
-    create("UIStroke", {
-        Color = color or Color3.fromRGB(65, 75, 95),
-        Thickness = thickness or 1
-    }, obj)
+local function fmtColor(c)
+    if typeof(c) ~= "Color3" then return tostring(c) end
+    return string.format("#%02X%02X%02X",
+        math.floor(c.R * 255 + 0.5),
+        math.floor(c.G * 255 + 0.5),
+        math.floor(c.B * 255 + 0.5))
 end
 
-local function makeButton(parent, text, size, position)
-    local b = create("TextButton", {
-        Size = size,
-        Position = position,
-        BackgroundColor3 = Color3.fromRGB(43, 53, 72),
-        TextColor3 = Color3.fromRGB(240, 244, 255),
-        Text = text,
-        TextSize = 13,
-        Font = Enum.Font.GothamSemibold,
-        AutoButtonColor = true,
-        BorderSizePixel = 0
-    }, parent)
-    corner(b, 6)
-    return b
-end
+-- ===== GUI Root =====
+local gui = create("ScreenGui", {
+    Name = "AvatarInspectorFull",
+    ResetOnSpawn = false,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    DisplayOrder = 10,
+}, CoreGui)
+if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- Main window
 local main = create("Frame", {
     Name = "Main",
-    Size = UDim2.new(0, 780, 0, 510),
-    Position = UDim2.new(0.5, -390, 0.5, -255),
+    Size = UDim2.new(0, 780, 0, 520),
+    Position = UDim2.new(0.5, -390, 0.5, -260),
     BackgroundColor3 = Color3.fromRGB(19, 23, 33),
     BorderSizePixel = 0,
-    Active = true
+    Active = true,
 }, gui)
 corner(main, 10)
-stroke(main, Color3.fromRGB(70, 90, 125), 1)
+stroke(main)
 
--- Header
+-- ===== Header =====
 local header = create("Frame", {
     Size = UDim2.new(1, 0, 0, 42),
     BackgroundColor3 = Color3.fromRGB(30, 38, 55),
     BorderSizePixel = 0,
-    Active = true
+    Active = true,
 }, main)
 corner(header, 10)
 
 create("TextLabel", {
-    Size = UDim2.new(1, -100, 1, 0),
+    Size = UDim2.new(1, -60, 1, 0),
     Position = UDim2.new(0, 12, 0, 0),
     BackgroundTransparency = 1,
     Text = "BROOKHAVEN | AVATAR INSPECTOR",
     TextColor3 = Color3.fromRGB(220, 235, 255),
     TextSize = 14,
     Font = Enum.Font.GothamBold,
-    TextXAlignment = Enum.TextXAlignment.Left
+    TextXAlignment = Enum.TextXAlignment.Left,
 }, header)
 
-local closeBtn = makeButton(
-    header, "X",
-    UDim2.new(0, 32, 0, 28),
-    UDim2.new(1, -40, 0, 7)
-)
-closeBtn.BackgroundColor3 = Color3.fromRGB(150, 55, 65)
-closeBtn.MouseButton1Click:Connect(function()
-    gui:Destroy()
-end)
+local closeBtn = create("TextButton", {
+    Size = UDim2.new(0, 32, 0, 28),
+    Position = UDim2.new(1, -40, 0, 7),
+    BackgroundColor3 = Color3.fromRGB(150, 55, 65),
+    TextColor3 = Color3.fromRGB(255, 240, 240),
+    Text = "X",
+    TextSize = 13,
+    Font = Enum.Font.GothamBold,
+    BorderSizePixel = 0,
+    AutoButtonColor = true,
+}, header)
+corner(closeBtn, 6)
+closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 
--- Drag window
+-- ===== Drag =====
 do
-    local dragging = false
-    local dragInput
-    local dragStart
-    local startPos
-
+    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
     header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = main.Position
-
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -127,33 +115,29 @@ do
             end)
         end
     end)
-
     header.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-
-    game:GetService("UserInputService").InputChanged:Connect(function(input)
+    UserInputService.InputChanged:Connect(function(input)
         if dragging and input == dragInput then
-            local delta = input.Position - dragStart
+            local d = input.Position - dragStart
             main.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
+                startPos.X.Scale, startPos.X.Offset + d.X,
+                startPos.Y.Scale, startPos.Y.Offset + d.Y
             )
         end
     end)
 end
 
--- Two panels
+-- ===== Panels =====
 local left = create("Frame", {
     Position = UDim2.new(0, 10, 0, 52),
     Size = UDim2.new(0, 225, 1, -62),
     BackgroundColor3 = Color3.fromRGB(25, 30, 43),
-    BorderSizePixel = 0
+    BorderSizePixel = 0,
 }, main)
 corner(left, 8)
 
@@ -161,25 +145,25 @@ local right = create("Frame", {
     Position = UDim2.new(0, 245, 0, 52),
     Size = UDim2.new(1, -255, 1, -62),
     BackgroundColor3 = Color3.fromRGB(25, 30, 43),
-    BorderSizePixel = 0
+    BorderSizePixel = 0,
 }, main)
 corner(right, 8)
 
--- Player selector
+-- ===== Left: Player Selector =====
 create("TextLabel", {
     Position = UDim2.new(0, 10, 0, 7),
-    Size = UDim2.new(1, -20, 0, 22),
+    Size = UDim2.new(1, -20, 0, 20),
     BackgroundTransparency = 1,
     Text = "PILIH PLAYER",
     TextColor3 = Color3.fromRGB(160, 200, 255),
     Font = Enum.Font.GothamBold,
     TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Left
+    TextXAlignment = Enum.TextXAlignment.Left,
 }, left)
 
 local search = create("TextBox", {
-    Position = UDim2.new(0, 10, 0, 34),
-    Size = UDim2.new(1, -20, 0, 30),
+    Position = UDim2.new(0, 10, 0, 30),
+    Size = UDim2.new(1, -20, 0, 28),
     BackgroundColor3 = Color3.fromRGB(36, 43, 60),
     TextColor3 = Color3.fromRGB(245, 245, 255),
     PlaceholderColor3 = Color3.fromRGB(145, 155, 175),
@@ -188,87 +172,108 @@ local search = create("TextBox", {
     ClearTextOnFocus = false,
     Font = Enum.Font.Gotham,
     TextSize = 12,
-    BorderSizePixel = 0
+    BorderSizePixel = 0,
 }, left)
 corner(search, 6)
 
-local refresh = makeButton(
-    left, "REFRESH PLAYER",
-    UDim2.new(1, -20, 0, 28),
-    UDim2.new(0, 10, 0, 70)
-)
+local refresh = create("TextButton", {
+    Size = UDim2.new(1, -20, 0, 26),
+    Position = UDim2.new(0, 10, 0, 64),
+    BackgroundColor3 = Color3.fromRGB(43, 53, 72),
+    TextColor3 = Color3.fromRGB(240, 244, 255),
+    Text = "REFRESH PLAYER",
+    TextSize = 12,
+    Font = Enum.Font.GothamSemibold,
+    BorderSizePixel = 0,
+    AutoButtonColor = true,
+}, left)
+corner(refresh, 6)
 
+-- Scroll: pakai AutomaticCanvasSize SAJA, tidak ada CanvasSize manual
 local playerScroll = create("ScrollingFrame", {
     Name = "PlayerScroll",
-    Position = UDim2.new(0, 8, 0, 106),
-    Size = UDim2.new(1, -16, 1, -114),
+    Position = UDim2.new(0, 8, 0, 98),
+    Size = UDim2.new(1, -16, 1, -106),
     BackgroundColor3 = Color3.fromRGB(20, 25, 36),
     BorderSizePixel = 0,
     ScrollBarThickness = 7,
     ScrollBarImageColor3 = Color3.fromRGB(110, 145, 195),
+    CanvasSize = UDim2.new(0, 0, 0, 0),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    ScrollingDirection = Enum.ScrollingDirection.Y,
+    ScrollingEnabled = true,
+    ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
     Active = true,
     Selectable = true,
-    ScrollingEnabled = true,
-    ScrollingDirection = Enum.ScrollingDirection.Y,
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    CanvasSize = UDim2.new(0, 0, 0, 0),
-    ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
 }, left)
 corner(playerScroll, 6)
-
-local playerLayout = create("UIListLayout", {
-    Padding = UDim.new(0, 5),
-    SortOrder = Enum.SortOrder.Name
-}, playerScroll)
 
 create("UIPadding", {
     PaddingTop = UDim.new(0, 6),
     PaddingBottom = UDim.new(0, 6),
     PaddingLeft = UDim.new(0, 5),
-    PaddingRight = UDim.new(0, 5)
+    PaddingRight = UDim.new(0, 5),
 }, playerScroll)
 
--- Detail header
+create("UIListLayout", {
+    Padding = UDim.new(0, 5),
+    SortOrder = Enum.SortOrder.Name,
+}, playerScroll)
+
+-- ===== Right: Detail =====
 local selectedLabel = create("TextLabel", {
-    Position = UDim2.new(0, 12, 0, 7),
-    Size = UDim2.new(1, -125, 0, 25),
+    Position = UDim2.new(0, 12, 0, 6),
+    Size = UDim2.new(1, -125, 0, 26),
     BackgroundTransparency = 1,
     Text = "Pilih pemain untuk memulai",
     TextColor3 = Color3.fromRGB(160, 200, 255),
     Font = Enum.Font.GothamBold,
     TextSize = 13,
     TextXAlignment = Enum.TextXAlignment.Left,
-    TextTruncate = Enum.TextTruncate.AtEnd
+    TextTruncate = Enum.TextTruncate.AtEnd,
 }, right)
 
-local scanBtn = makeButton(
-    right, "SCAN ULANG",
-    UDim2.new(0, 100, 0, 27),
-    UDim2.new(1, -112, 0, 6)
-)
+local scanBtn = create("TextButton", {
+    Size = UDim2.new(0, 100, 0, 26),
+    Position = UDim2.new(1, -112, 0, 6),
+    BackgroundColor3 = Color3.fromRGB(43, 53, 72),
+    TextColor3 = Color3.fromRGB(240, 244, 255),
+    Text = "SCAN ULANG",
+    TextSize = 12,
+    Font = Enum.Font.GothamSemibold,
+    BorderSizePixel = 0,
+    AutoButtonColor = true,
+}, right)
+corner(scanBtn, 6)
 
 local detailScroll = create("ScrollingFrame", {
     Name = "DetailScroll",
-    Position = UDim2.new(0, 8, 0, 39),
-    Size = UDim2.new(1, -16, 1, -47),
+    Position = UDim2.new(0, 8, 0, 38),
+    Size = UDim2.new(1, -16, 1, -46),
     BackgroundColor3 = Color3.fromRGB(20, 25, 36),
     BorderSizePixel = 0,
     ScrollBarThickness = 8,
     ScrollBarImageColor3 = Color3.fromRGB(110, 145, 195),
+    CanvasSize = UDim2.new(0, 0, 0, 0),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    ScrollingDirection = Enum.ScrollingDirection.Y,
+    ScrollingEnabled = true,
+    ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
     Active = true,
     Selectable = true,
-    ScrollingEnabled = true,
-    ScrollingDirection = Enum.ScrollingDirection.Y,
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    CanvasSize = UDim2.new(0, 0, 0, 0),
-    ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
 }, right)
 corner(detailScroll, 6)
 
+create("UIPadding", {
+    PaddingTop = UDim.new(0, 8),
+    PaddingBottom = UDim.new(0, 8),
+    PaddingLeft = UDim.new(0, 10),
+    PaddingRight = UDim.new(0, 10),
+}, detailScroll)
+
 local detailText = create("TextLabel", {
     Name = "DetailText",
-    Position = UDim2.new(0, 10, 0, 8),
-    Size = UDim2.new(1, -20, 0, 0),
+    Size = UDim2.new(1, 0, 0, 0),
     AutomaticSize = Enum.AutomaticSize.Y,
     BackgroundTransparency = 1,
     Text = "Pilih pemain dari daftar di sebelah kiri.",
@@ -278,62 +283,27 @@ local detailText = create("TextLabel", {
     TextWrapped = true,
     TextXAlignment = Enum.TextXAlignment.Left,
     TextYAlignment = Enum.TextYAlignment.Top,
-    RichText = false
+    RichText = false,
 }, detailScroll)
 
--- State
+-- ===== State =====
 local selectedPlayer = nil
 local scanning = false
 local playerButtons = {}
 
-local function safeString(value)
-    if value == nil then
-        return "N/A"
-    end
-    return tostring(value)
-end
-
-local function addLine(lines, value)
-    table.insert(lines, tostring(value))
-end
-
-local function getProperty(obj, prop)
-    local ok, value = pcall(function()
-        return obj[prop]
-    end)
-    if ok then
-        return value
-    end
-    return nil
-end
-
+-- ===== Scan =====
 local function getDescription(player)
-    local character = player.Character
-    if not character then
-        return nil, "Karakter belum tersedia."
-    end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then
-        return nil, "Humanoid tidak ditemukan."
-    end
-
-    local ok, desc = pcall(function()
-        return humanoid:GetAppliedDescription()
-    end)
-
-    if ok then
-        return desc
-    end
-
+    local char = player.Character
+    if not char then return nil, "Karakter belum tersedia." end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return nil, "Humanoid tidak ditemukan." end
+    local ok, desc = pcall(function() return hum:GetAppliedDescription() end)
+    if ok and desc then return desc end
     return nil, "Gagal membaca HumanoidDescription."
 end
 
 local function scanPlayer(player)
-    if scanning then
-        return
-    end
-
+    if scanning then return end
     scanning = true
     selectedPlayer = player
     selectedLabel.Text = "Memindai: " .. player.Name
@@ -341,393 +311,296 @@ local function scanPlayer(player)
     detailScroll.CanvasPosition = Vector2.new(0, 0)
 
     task.spawn(function()
-        local lines = {}
-        local partCount = 0
-        local meshPartCount = 0
-        local accessoryCount = 0
-        local layeredCount = 0
-        local specialMeshCount = 0
-        local decalCount = 0
-        local textureCount = 0
-        local wrapLayerCount = 0
-        local wrapTargetCount = 0
-        local errors = 0
-
-        addLine(lines, "========================================")
-        addLine(lines, "AVATAR INSPECTOR - HASIL PEMINDAIAN")
-        addLine(lines, "========================================")
-        addLine(lines, "Player Name : " .. player.Name)
-        addLine(lines, "DisplayName : " .. player.DisplayName)
-        addLine(lines, "UserId      : " .. tostring(player.UserId))
-        addLine(lines, "Waktu scan  : " .. os.date("%Y-%m-%d %H:%M:%S"))
-        addLine(lines, "")
-
-        if player ~= LocalPlayer then
-            addLine(lines, "CATATAN: Data yang terbaca bergantung pada")
-            addLine(lines, "objek avatar yang direplikasi ke client.")
-            addLine(lines, "")
+        local L = {}
+        local function add(s) L[#L + 1] = tostring(s) end
+        local function flush()
+            detailText.Text = table.concat(L, "\n")
+            task.wait()
         end
 
-        local character = player.Character
-        if not character then
-            addLine(lines, "STATUS: Karakter tidak tersedia.")
-            detailText.Text = table.concat(lines, "\n")
+        local partCount, meshPartCount, specialMeshCount = 0, 0, 0
+        local accessoryCount, layeredCount = 0, 0
+        local decalCount, wrapLayerCount, wrapTargetCount = 0, 0, 0
+        local errors = 0
+
+        add("========================================")
+        add("AVATAR INSPECTOR - HASIL PEMINDAIAN")
+        add("========================================")
+        add("Player Name : " .. player.Name)
+        add("DisplayName : " .. player.DisplayName)
+        add("UserId      : " .. tostring(player.UserId))
+        add("Waktu scan  : " .. os.date("%Y-%m-%d %H:%M:%S"))
+        add("")
+        if player ~= LocalPlayer then
+            add("CATATAN: Data bergantung pada replikasi client.")
+            add("")
+        end
+
+        local char = player.Character
+        if not char then
+            add("STATUS: Karakter tidak tersedia.")
+            detailText.Text = table.concat(L, "\n")
             selectedLabel.Text = "Karakter tidak tersedia"
             scanning = false
             return
         end
 
-        -- HumanoidDescription IDs
-        addLine(lines, "----------------------------------------")
-        addLine(lines, "[1] HUMANOID DESCRIPTION - BODY & CLOTHES")
-        addLine(lines, "----------------------------------------")
-
-        local desc, descError = getDescription(player)
+        -- [1] HumanoidDescription
+        add("----------------------------------------")
+        add("[1] HUMANOID DESCRIPTION")
+        add("----------------------------------------")
+        local desc, descErr = getDescription(player)
         if desc then
-            local properties = {
-                {"Shirt", "Shirt"},
-                {"Pants", "Pants"},
-                {"GraphicTShirt", "T-Shirt / Graphic"},
-                {"Face", "Face"},
-                {"Head", "Head"},
-                {"Torso", "Torso"},
-                {"LeftArm", "Left Arm"},
-                {"RightArm", "Right Arm"},
-                {"LeftLeg", "Left Leg"},
-                {"RightLeg", "Right Leg"}
+            local fields = {
+                {"Shirt","Shirt"},{"Pants","Pants"},
+                {"GraphicTShirt","T-Shirt"},{"Face","Face"},
+                {"Head","Head"},{"Torso","Torso"},
+                {"LeftArm","Left Arm"},{"RightArm","Right Arm"},
+                {"LeftLeg","Left Leg"},{"RightLeg","Right Leg"},
             }
-
-            for _, item in ipairs(properties) do
-                local value = getProperty(desc, item[1])
-                addLine(lines, item[2] .. " ID: " .. safeString(value))
+            for _, f in ipairs(fields) do
+                local ok, v = pcall(function() return desc[f[1]] end)
+                add(string.format("%-10s ID: %s", f[2], fmtId(ok and v or nil)))
             end
-
-            addLine(lines, "")
-            addLine(lines, "Body Colors:")
-
-            for _, prop in ipairs({
-                "HeadColor", "TorsoColor",
-                "LeftArmColor", "RightArmColor",
-                "LeftLegColor", "RightLegColor"
-            }) do
-                local color = getProperty(desc, prop)
-                if typeof(color) == "Color3" then
-                    addLine(lines, "  " .. prop .. ": " ..
-                        string.format("#%02X%02X%02X",
-                            math.floor(color.R * 255),
-                            math.floor(color.G * 255),
-                            math.floor(color.B * 255)))
-                else
-                    addLine(lines, "  " .. prop .. ": " .. safeString(color))
-                end
+            add("")
+            add("Body Colors:")
+            for _, p in ipairs({"HeadColor","TorsoColor","LeftArmColor",
+                                "RightArmColor","LeftLegColor","RightLegColor"}) do
+                local ok, c = pcall(function() return desc[p] end)
+                add("  " .. p .. ": " .. (ok and fmtColor(c) or "N/A"))
             end
+            flush()
 
-            -- Accessories from HumanoidDescription
-            addLine(lines, "")
-            addLine(lines, "----------------------------------------")
-            addLine(lines, "[2] ACCESSORIES DARI DESCRIPTION")
-            addLine(lines, "----------------------------------------")
-
-            local ok, accessories = pcall(function()
-                return desc:GetAccessories(true)
-            end)
-
-            if ok and type(accessories) == "table" then
-                addLine(lines, "Jumlah entri description: " .. #accessories)
-
-                for index, accessory in ipairs(accessories) do
-                    addLine(lines, "")
-                    addLine(lines, "Accessory #" .. index)
-                    addLine(lines, "  AssetId: " ..
-                        safeString(accessory.AssetId))
-                    addLine(lines, "  AccessoryType: " ..
-                        safeString(accessory.AccessoryType))
-                    addLine(lines, "  IsLayered: " ..
-                        safeString(accessory.IsLayered))
-                    addLine(lines, "  Order: " ..
-                        safeString(accessory.Order))
-                    addLine(lines, "  Puffiness: " ..
-                        safeString(accessory.Puffiness))
-
-                    if accessory.IsLayered then
-                        layeredCount += 1
-                    end
+            -- [2] Accessories dari description
+            add("")
+            add("----------------------------------------")
+            add("[2] ACCESSORIES DARI DESCRIPTION")
+            add("----------------------------------------")
+            local ok, accs = pcall(function() return desc:GetAccessories(true) end)
+            if ok and type(accs) == "table" then
+                add("Jumlah entri: " .. #accs)
+                for i, a in ipairs(accs) do
+                    add("")
+                    add("Accessory #" .. i)
+                    add("  AssetId       : " .. fmtId(a.AssetId))
+                    add("  AccessoryType : " .. tostring(a.AccessoryType))
+                    add("  IsLayered     : " .. tostring(a.IsLayered))
+                    add("  Order         : " .. tostring(a.Order))
+                    add("  Puffiness     : " .. tostring(a.Puffiness))
+                    if a.IsLayered then layeredCount += 1 end
                 end
             else
-                addLine(lines, "Gagal membaca daftar accessories description.")
+                add("Gagal membaca accessories description.")
                 errors += 1
             end
         else
-            addLine(lines, "Description tidak terbaca: " .. safeString(descError))
+            add("Description tidak terbaca: " .. tostring(descErr))
             errors += 1
         end
+        flush()
 
-        -- Actual character hierarchy
-        addLine(lines, "")
-        addLine(lines, "========================================")
-        addLine(lines, "[3] SEMUA PART DAN OBJEK KARAKTER")
-        addLine(lines, "========================================")
-
-        local descendants = character:GetDescendants()
+        -- [3] Semua part & objek
+        add("")
+        add("========================================")
+        add("[3] SEMUA PART DAN OBJEK KARAKTER")
+        add("========================================")
+        local descendants = char:GetDescendants()
         local actualAccessories = {}
-
-        for _, obj in ipairs(descendants) do
-            if obj:IsA("Accessory") then
-                table.insert(actualAccessories, obj)
+        for _, o in ipairs(descendants) do
+            if o:IsA("Accessory") then
+                actualAccessories[#actualAccessories + 1] = o
             end
         end
-
         accessoryCount = #actualAccessories
+        add("Total descendant : " .. #descendants)
+        add("Accessory instance: " .. accessoryCount)
+        add("")
+        flush()
 
-        addLine(lines, "Total descendant: " .. #descendants)
-        addLine(lines, "Accessory instance: " .. accessoryCount)
-        addLine(lines, "")
-
-        for _, obj in ipairs(descendants) do
-            if obj:IsA("BasePart") then
+        for _, o in ipairs(descendants) do
+            if o:IsA("BasePart") then
                 partCount += 1
-
-                if obj:IsA("MeshPart") then
-                    meshPartCount += 1
+                if o:IsA("MeshPart") then meshPartCount += 1 end
+                add("[PART] " .. o:GetFullName())
+                add("  Class: " .. o.ClassName)
+                add("  Size: " .. tostring(o.Size))
+                add("  Position: " .. tostring(o.Position))
+                add("  Transparency: " .. tostring(o.Transparency))
+                if o:IsA("MeshPart") then
+                    add("  MeshId: " .. fmtId(o.MeshId))
+                    add("  TextureID: " .. fmtId(o.TextureID))
                 end
-
-                addLine(lines, "[PART] " .. obj:GetFullName())
-                addLine(lines, "  Class: " .. obj.ClassName)
-                addLine(lines, "  Size: " .. tostring(obj.Size))
-                addLine(lines, "  Position: " .. tostring(obj.Position))
-                addLine(lines, "  Transparency: " .. tostring(obj.Transparency))
-
-                if obj:IsA("MeshPart") then
-                    addLine(lines, "  MeshId: " .. safeString(obj.MeshId))
-                    addLine(lines, "  TextureID: " .. safeString(obj.TextureID))
-                end
-
-                local surfaceAppearance = obj:FindFirstChildOfClass("SurfaceAppearance")
-                if surfaceAppearance then
-                    addLine(lines, "  SurfaceAppearance: " ..
-                        surfaceAppearance:GetFullName())
-                    addLine(lines, "  ColorMap: " ..
-                        safeString(surfaceAppearance.ColorMap))
-                    addLine(lines, "  NormalMap: " ..
-                        safeString(surfaceAppearance.NormalMap))
-                    addLine(lines, "  RoughnessMap: " ..
-                        safeString(surfaceAppearance.RoughnessMap))
-                    addLine(lines, "  MetalnessMap: " ..
-                        safeString(surfaceAppearance.MetalnessMap))
+                local sa = o:FindFirstChildOfClass("SurfaceAppearance")
+                if sa then
+                    add("  SurfaceAppearance: " .. sa:GetFullName())
+                    add("  ColorMap: " .. fmtId(sa.ColorMap))
+                    add("  NormalMap: " .. fmtId(sa.NormalMap))
+                    add("  RoughnessMap: " .. fmtId(sa.RoughnessMap))
+                    add("  MetalnessMap: " .. fmtId(sa.MetalnessMap))
                 end
             end
-
-            if obj:IsA("SpecialMesh") then
+            if o:IsA("SpecialMesh") then
                 specialMeshCount += 1
-                addLine(lines, "")
-                addLine(lines, "[SPECIAL MESH] " .. obj:GetFullName())
-                addLine(lines, "  MeshType: " .. safeString(obj.MeshType))
-                addLine(lines, "  MeshId: " .. safeString(obj.MeshId))
-                addLine(lines, "  TextureId: " .. safeString(obj.TextureId))
+                add("[SPECIAL MESH] " .. o:GetFullName())
+                add("  MeshType: " .. tostring(o.MeshType))
+                add("  MeshId: " .. fmtId(o.MeshId))
+                add("  TextureId: " .. fmtId(o.TextureId))
             end
-
-            if obj:IsA("Decal") or obj:IsA("Texture") then
+            if o:IsA("Decal") or o:IsA("Texture") then
                 decalCount += 1
-                textureCount += 1
-                addLine(lines, "")
-                addLine(lines, "[DECAL/TEXTURE] " .. obj:GetFullName())
-                addLine(lines, "  Class: " .. obj.ClassName)
-                addLine(lines, "  Texture: " .. safeString(obj.Texture))
+                add("[DECAL/TEXTURE] " .. o:GetFullName())
+                add("  Class: " .. o.ClassName)
+                add("  Texture: " .. fmtId(o.Texture))
             end
-
-            if obj:IsA("WrapLayer") then
+            if o:IsA("WrapLayer") then
                 wrapLayerCount += 1
-                addLine(lines, "")
-                addLine(lines, "[WRAP LAYER] " .. obj:GetFullName())
-                addLine(lines, "  ReferenceMeshId: " ..
-                    safeString(getProperty(obj, "ReferenceMeshId")))
-                addLine(lines, "  CageMeshId: " ..
-                    safeString(getProperty(obj, "CageMeshId")))
+                add("[WRAP LAYER] " .. o:GetFullName())
+                add("  ReferenceMeshId: " .. fmtId(o.ReferenceMeshId))
+                add("  CageMeshId: " .. fmtId(o.CageMeshId))
             end
-
-            if obj:IsA("WrapTarget") then
+            if o:IsA("WrapTarget") then
                 wrapTargetCount += 1
-                addLine(lines, "")
-                addLine(lines, "[WRAP TARGET] " .. obj:GetFullName())
-                addLine(lines, "  CageMeshId: " ..
-                    safeString(getProperty(obj, "CageMeshId")))
+                add("[WRAP TARGET] " .. o:GetFullName())
+                add("  CageMeshId: " .. fmtId(o.CageMeshId))
             end
-
-            if obj:IsA("Shirt") then
-                addLine(lines, "")
-                addLine(lines, "[SHIRT INSTANCE] " .. obj:GetFullName())
-                addLine(lines, "  ShirtTemplate: " ..
-                    safeString(obj.ShirtTemplate))
-            elseif obj:IsA("Pants") then
-                addLine(lines, "")
-                addLine(lines, "[PANTS INSTANCE] " .. obj:GetFullName())
-                addLine(lines, "  PantsTemplate: " ..
-                    safeString(obj.PantsTemplate))
-            elseif obj:IsA("ShirtGraphic") then
-                addLine(lines, "")
-                addLine(lines, "[SHIRT GRAPHIC] " .. obj:GetFullName())
-                addLine(lines, "  Graphic: " .. safeString(obj.Graphic))
+            if o:IsA("Shirt") then
+                add("[SHIRT] " .. o:GetFullName())
+                add("  ShirtTemplate: " .. fmtId(o.ShirtTemplate))
+            elseif o:IsA("Pants") then
+                add("[PANTS] " .. o:GetFullName())
+                add("  PantsTemplate: " .. fmtId(o.PantsTemplate))
+            elseif o:IsA("ShirtGraphic") then
+                add("[SHIRT GRAPHIC] " .. o:GetFullName())
+                add("  Graphic: " .. fmtId(o.Graphic))
             end
         end
+        flush()
 
-        -- Actual accessory hierarchy and contained objects
-        addLine(lines, "")
-        addLine(lines, "========================================")
-        addLine(lines, "[4] DETAIL SETIAP ACCESSORY INSTANCE")
-        addLine(lines, "========================================")
-
+        -- [4] Accessory instances
+        add("")
+        add("========================================")
+        add("[4] DETAIL SETIAP ACCESSORY INSTANCE")
+        add("========================================")
         if #actualAccessories == 0 then
-            addLine(lines, "Tidak ada Accessory instance di character.")
+            add("Tidak ada Accessory instance di character.")
         end
-
-        for index, accessory in ipairs(actualAccessories) do
-            addLine(lines, "")
-            addLine(lines, "ACCESSORY INSTANCE #" .. index)
-            addLine(lines, "Name: " .. accessory.Name)
-            addLine(lines, "Path: " .. accessory:GetFullName())
-
-            local handle = accessory:FindFirstChild("Handle")
+        for i, acc in ipairs(actualAccessories) do
+            add("")
+            add("ACCESSORY #" .. i)
+            add("Name: " .. acc.Name)
+            add("Path: " .. acc:GetFullName())
+            local handle = acc:FindFirstChild("Handle")
             if handle then
-                addLine(lines, "Handle: " .. handle:GetFullName())
-                addLine(lines, "Handle Class: " .. handle.ClassName)
-
+                add("Handle: " .. handle:GetFullName())
+                add("Handle Class: " .. handle.ClassName)
                 if handle:IsA("MeshPart") then
-                    addLine(lines, "Handle MeshId: " .. safeString(handle.MeshId))
-                    addLine(lines, "Handle TextureID: " .. safeString(handle.TextureID))
+                    add("Handle MeshId: " .. fmtId(handle.MeshId))
+                    add("Handle TextureID: " .. fmtId(handle.TextureID))
                 end
-
-                for _, item in ipairs(handle:GetDescendants()) do
-                    if item:IsA("SpecialMesh") then
-                        addLine(lines, "  SpecialMesh: " .. item:GetFullName())
-                        addLine(lines, "    MeshId: " .. safeString(item.MeshId))
-                        addLine(lines, "    TextureId: " .. safeString(item.TextureId))
-                    elseif item:IsA("Decal") or item:IsA("Texture") then
-                        addLine(lines, "  Texture object: " .. item:GetFullName())
-                        addLine(lines, "    Texture: " .. safeString(item.Texture))
-                    elseif item:IsA("WrapLayer") then
-                        addLine(lines, "  WrapLayer: " .. item:GetFullName())
-                        addLine(lines, "    ReferenceMeshId: " ..
-                            safeString(getProperty(item, "ReferenceMeshId")))
-                        addLine(lines, "    CageMeshId: " ..
-                            safeString(getProperty(item, "CageMeshId")))
+                for _, it in ipairs(handle:GetDescendants()) do
+                    if it:IsA("SpecialMesh") then
+                        add("  SpecialMesh: " .. it:GetFullName())
+                        add("    MeshId: " .. fmtId(it.MeshId))
+                        add("    TextureId: " .. fmtId(it.TextureId))
+                    elseif it:IsA("Decal") or it:IsA("Texture") then
+                        add("  Texture: " .. it:GetFullName())
+                        add("    Texture: " .. fmtId(it.Texture))
+                    elseif it:IsA("WrapLayer") then
+                        add("  WrapLayer: " .. it:GetFullName())
+                        add("    ReferenceMeshId: " .. fmtId(it.ReferenceMeshId))
+                        add("    CageMeshId: " .. fmtId(it.CageMeshId))
                     end
                 end
             else
-                addLine(lines, "Handle: TIDAK DITEMUKAN")
+                add("Handle: TIDAK DITEMUKAN")
             end
         end
+        flush()
 
-        -- Final summary
-        addLine(lines, "")
-        addLine(lines, "========================================")
-        addLine(lines, "[5] STATUS AKHIR PEMINDAIAN")
-        addLine(lines, "========================================")
-        addLine(lines, "Player: " .. player.Name)
-        addLine(lines, "BasePart total: " .. partCount)
-        addLine(lines, "MeshPart total: " .. meshPartCount)
-        addLine(lines, "SpecialMesh total: " .. specialMeshCount)
-        addLine(lines, "Accessory instance: " .. accessoryCount)
-        addLine(lines, "Layered accessories (description): " .. layeredCount)
-        addLine(lines, "Decal/Texture objects: " .. decalCount)
-        addLine(lines, "Texture objects counted: " .. textureCount)
-        addLine(lines, "WrapLayer total: " .. wrapLayerCount)
-        addLine(lines, "WrapTarget total: " .. wrapTargetCount)
-        addLine(lines, "Error pembacaan: " .. errors)
-        addLine(lines, "")
-
-        if player.Character == character then
-            addLine(lines, "STATUS: PEMINDAIAN SELESAI")
-            addLine(lines, "Semua descendant karakter yang tersedia pada")
-            addLine(lines, "client saat pemindaian telah diperiksa.")
+        -- [5] Status
+        add("")
+        add("========================================")
+        add("[5] STATUS AKHIR PEMINDAIAN")
+        add("========================================")
+        add("Player: " .. player.Name)
+        add("BasePart total: " .. partCount)
+        add("MeshPart total: " .. meshPartCount)
+        add("SpecialMesh total: " .. specialMeshCount)
+        add("Accessory instance: " .. accessoryCount)
+        add("Layered accessories (description): " .. layeredCount)
+        add("Decal/Texture objects: " .. decalCount)
+        add("WrapLayer total: " .. wrapLayerCount)
+        add("WrapTarget total: " .. wrapTargetCount)
+        add("Error pembacaan: " .. errors)
+        add("")
+        if player.Character == char then
+            add("STATUS: PEMINDAIAN SELESAI")
+            add("Semua descendant karakter yang tersedia pada")
+            add("client saat pemindaian telah diperiksa.")
         else
-            addLine(lines, "STATUS: KARAKTER BERUBAH SAAT PEMINDAIAN")
-            addLine(lines, "Jalankan SCAN ULANG untuk karakter terbaru.")
+            add("STATUS: KARAKTER BERUBAH SAAT PEMINDAIAN")
+            add("Jalankan SCAN ULANG untuk karakter terbaru.")
         end
+        add("")
+        add("CATATAN:")
+        add("- ID 0 = field HumanoidDescription tidak diset.")
+        add("- MeshId bukan selalu ID katalog avatar.")
+        add("- AssetId description adalah ID aset aksesori.")
+        add("- Objek yang tidak direplikasi ke client tidak terlihat.")
+        add("========================================")
+        add("AKHIR HASIL PEMINDAIAN")
 
-        addLine(lines, "")
-        addLine(lines, "CATATAN:")
-        addLine(lines, "- MeshId bukan selalu ID katalog avatar.")
-        addLine(lines, "- AssetId description adalah ID aset aksesori.")
-        addLine(lines, "- Objek yang tidak direplikasi ke client tidak")
-        addLine(lines, "  dapat ditampilkan oleh LocalScript ini.")
-        addLine(lines, "========================================")
-        addLine(lines, "AKHIR HASIL PEMINDAIAN")
-
-        detailText.Text = table.concat(lines, "\n")
+        detailText.Text = table.concat(L, "\n")
         detailScroll.CanvasPosition = Vector2.new(0, 0)
-
         selectedLabel.Text = "Selesai: " .. player.Name
         scanning = false
     end)
 end
 
--- Build player list
+-- ===== Player list =====
 local function refreshPlayers()
-    for _, child in ipairs(playerScroll:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
-        end
+    for _, c in ipairs(playerScroll:GetChildren()) do
+        if c:IsA("TextButton") then c:Destroy() end
     end
-
     playerButtons = {}
-
     local list = Players:GetPlayers()
-    table.sort(list, function(a, b)
-        return a.Name:lower() < b.Name:lower()
-    end)
-
-    for _, player in ipairs(list) do
-        local button = create("TextButton", {
-            Name = "Player_" .. player.Name,
-            Size = UDim2.new(1, -2, 0, 34),
+    table.sort(list, function(a, b) return a.Name:lower() < b.Name:lower() end)
+    for _, p in ipairs(list) do
+        local b = create("TextButton", {
+            Name = "Player_" .. p.Name,
+            Size = UDim2.new(1, 0, 0, 32),
             BackgroundColor3 = Color3.fromRGB(39, 48, 66),
             TextColor3 = Color3.fromRGB(235, 240, 255),
-            Text = player.DisplayName .. "  (@" .. player.Name .. ")",
+            Text = p.DisplayName .. "  (@" .. p.Name .. ")",
             TextSize = 11,
             Font = Enum.Font.Gotham,
             TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
             BorderSizePixel = 0,
             AutoButtonColor = true,
-            Visible = true
         }, playerScroll)
-
-        corner(button, 5)
-        playerButtons[player] = button
-
-        button.MouseButton1Click:Connect(function()
-            scanPlayer(player)
-        end)
+        corner(b, 5)
+        create("UIPadding", { PaddingLeft = UDim.new(0, 8) }, b)
+        playerButtons[p] = b
+        b.MouseButton1Click:Connect(function() scanPlayer(p) end)
     end
-
     playerScroll.CanvasPosition = Vector2.new(0, 0)
 end
 
 local function filterPlayers()
-    local query = search.Text:lower()
-
-    for player, button in pairs(playerButtons) do
-        if player.Parent == Players then
-            button.Visible =
-                query == ""
-                or player.Name:lower():find(query, 1, true) ~= nil
-                or player.DisplayName:lower():find(query, 1, true) ~= nil
+    local q = search.Text:lower()
+    for p, b in pairs(playerButtons) do
+        if p.Parent == Players then
+            b.Visible = q == ""
+                or p.Name:lower():find(q, 1, true) ~= nil
+                or p.DisplayName:lower():find(q, 1, true) ~= nil
         else
-            button.Visible = false
+            b.Visible = false
         end
     end
-
-    task.defer(function()
-        playerScroll.CanvasSize = UDim2.new(
-            0, 0, 0, playerLayout.AbsoluteContentSize.Y + 14
-        )
-    end)
 end
 
-refresh.MouseButton1Click:Connect(function()
-    refreshPlayers()
-    filterPlayers()
-end)
-
+refresh.MouseButton1Click:Connect(function() refreshPlayers(); filterPlayers() end)
 search:GetPropertyChangedSignal("Text"):Connect(filterPlayers)
 
 scanBtn.MouseButton1Click:Connect(function()
@@ -738,47 +611,17 @@ scanBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-playerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    playerScroll.CanvasSize = UDim2.new(
-        0, 0, 0, playerLayout.AbsoluteContentSize.Y + 14
-    )
-end)
-
 Players.PlayerAdded:Connect(function()
-    task.defer(function()
-        refreshPlayers()
-        filterPlayers()
-    end)
+    task.defer(function() refreshPlayers(); filterPlayers() end)
 end)
 
-Players.PlayerRemoving:Connect(function(player)
-    if selectedPlayer == player then
+Players.PlayerRemoving:Connect(function(p)
+    if selectedPlayer == p then
         selectedPlayer = nil
         selectedLabel.Text = "Pemain keluar"
         detailText.Text = "Pemain yang dipilih sudah keluar dari server."
     end
-
-    task.defer(function()
-        refreshPlayers()
-        filterPlayers()
-    end)
-end)
-
--- Recalculate detail canvas after text/layout changes
-detailText:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-    task.defer(function()
-        detailScroll.CanvasSize = UDim2.new(
-            0, 0, 0, detailText.AbsoluteSize.Y + 20
-        )
-    end)
-end)
-
-detailScroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-    task.defer(function()
-        detailScroll.CanvasSize = UDim2.new(
-            0, 0, 0, detailText.AbsoluteSize.Y + 20
-        )
-    end)
+    task.defer(function() refreshPlayers(); filterPlayers() end)
 end)
 
 refreshPlayers()
@@ -786,6 +629,8 @@ filterPlayers()
 
 detailText.Text =
     "Pilih pemain di panel kiri, lalu tunggu pemindaian selesai.\n\n" ..
-    "Hasil akan menampilkan ID body dan pakaian, daftar aksesori, " ..
-    "layered accessories, semua BasePart yang ditemukan, mesh, " ..
-    "tekstur, dan STATUS AKHIR di bagian paling bawah."
+    "Hasil menampilkan ID body & pakaian, daftar aksesori, layered " ..
+    "accessories, semua BasePart, mesh, tekstur, dan STATUS AKHIR " ..
+    "di bagian paling bawah.\n\n" ..
+    "Catatan: ID yang bernilai 0 berarti field HumanoidDescription " ..
+    "tersebut tidak diset oleh pemain (bukan bug scan)."
