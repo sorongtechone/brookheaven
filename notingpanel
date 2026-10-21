@@ -1,0 +1,270 @@
+pcall(function()
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+end)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local guiName = "NothingPanelUI"
+
+-- Hapus instance sebelumnya
+local targetParent = player:WaitForChild("PlayerGui")
+if targetParent:FindFirstChild(guiName) then
+    targetParent[guiName]:Destroy()
+end
+
+-- ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = guiName
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = targetParent
+
+-- Sound
+local ClickSound = Instance.new("Sound")
+ClickSound.SoundId = "rbxassetid://876939830"
+ClickSound.Volume = 1
+ClickSound.Parent = ScreenGui
+
+local function PlayClick()
+    pcall(function() ClickSound:Play() end)
+end
+
+-- Dragging
+local function MakeDraggable(guiObject, dragArea)
+    dragArea = dragArea or guiObject
+    local dragging, dragInput, dragStart, startPos
+
+    dragArea.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    dragArea.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            guiObject.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+-- Main frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0.4, 0, 0.55, 0)
+MainFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Visible = true
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+-- Topbar
+local Topbar = Instance.new("Frame")
+Topbar.Size = UDim2.new(1, 0, 0, 35)
+Topbar.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+Topbar.BorderSizePixel = 0
+Topbar.Parent = MainFrame
+MakeDraggable(MainFrame, Topbar)
+Instance.new("UICorner", Topbar).CornerRadius = UDim.new(0, 8)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -80, 1, 0)
+Title.Position = UDim2.new(0, 15, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Nothing Panel"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 15
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Topbar
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 35, 0, 35)
+CloseBtn.Position = UDim2.new(1, -35, 0, 0)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 75, 75)
+CloseBtn.TextSize = 16
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = Topbar
+
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 35, 0, 35)
+MinimizeBtn.Position = UDim2.new(1, -70, 0, 0)
+MinimizeBtn.BackgroundTransparency = 1
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.TextSize = 20
+MinimizeBtn.Font = Enum.Font.GothamBold
+MinimizeBtn.Parent = Topbar
+
+-- Confirm overlay
+local ConfirmFrame = Instance.new("Frame")
+ConfirmFrame.Size = UDim2.new(1, 0, 1, 0)
+ConfirmFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+ConfirmFrame.BackgroundTransparency = 0.3
+ConfirmFrame.BorderSizePixel = 0
+ConfirmFrame.Visible = false
+ConfirmFrame.ZIndex = 10
+ConfirmFrame.Parent = MainFrame
+Instance.new("UICorner", ConfirmFrame).CornerRadius = UDim.new(0, 8)
+
+local ConfirmBox = Instance.new("Frame")
+ConfirmBox.Size = UDim2.new(0.7, 0, 0.4, 0)
+ConfirmBox.Position = UDim2.new(0.15, 0, 0.3, 0)
+ConfirmBox.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+ConfirmBox.BorderSizePixel = 0
+ConfirmBox.ZIndex = 11
+ConfirmBox.Parent = ConfirmFrame
+Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 8)
+
+local PromptText = Instance.new("TextLabel")
+PromptText.Size = UDim2.new(1, 0, 0.5, 0)
+PromptText.BackgroundTransparency = 1
+PromptText.Text = "Do you want to close script?"
+PromptText.TextColor3 = Color3.fromRGB(255, 255, 255)
+PromptText.Font = Enum.Font.GothamBold
+PromptText.TextSize = 14
+PromptText.ZIndex = 11
+PromptText.Parent = ConfirmBox
+
+local YesBtn = Instance.new("TextButton")
+YesBtn.Size = UDim2.new(0.4, 0, 0.35, 0)
+YesBtn.Position = UDim2.new(0.08, 0, 0.55, 0)
+YesBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+YesBtn.Text = "Yes"
+YesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+YesBtn.Font = Enum.Font.GothamBold
+YesBtn.TextSize = 13
+YesBtn.ZIndex = 11
+YesBtn.Parent = ConfirmBox
+Instance.new("UICorner", YesBtn).CornerRadius = UDim.new(0, 6)
+
+local NoBtn = Instance.new("TextButton")
+NoBtn.Size = UDim2.new(0.4, 0, 0.35, 0)
+NoBtn.Position = UDim2.new(0.52, 0, 0.55, 0)
+NoBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+NoBtn.Text = "No"
+NoBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+NoBtn.Font = Enum.Font.GothamBold
+NoBtn.TextSize = 13
+NoBtn.ZIndex = 11
+NoBtn.Parent = ConfirmBox
+Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 6)
+
+-- Scroll list
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, -20, 1, -50)
+ScrollFrame.Position = UDim2.new(0, 10, 0, 45)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 4
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ScrollFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, 8)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Parent = ScrollFrame
+
+-- Reopen button
+local ReopenBtn = Instance.new("TextButton")
+ReopenBtn.Size = UDim2.new(0, 50, 0, 50)
+ReopenBtn.Position = UDim2.new(0, 20, 0.5, -25)
+ReopenBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+ReopenBtn.Text = "NP"
+ReopenBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ReopenBtn.TextSize = 14
+ReopenBtn.Font = Enum.Font.GothamBold
+ReopenBtn.Visible = false
+ReopenBtn.Parent = ScreenGui
+Instance.new("UICorner", ReopenBtn).CornerRadius = UDim.new(0, 25)
+MakeDraggable(ReopenBtn, ReopenBtn)
+
+-- Load payloads (AMAN: UI tetap muncul walau gagal)
+local success, Payloads = pcall(function()
+    return loadstring(game:HttpGet(
+        "https://raw.githubusercontent.com/np00-bot/rawr/refs/heads/main/Obfuscation%20test"
+    ))()
+end)
+
+if not success or type(Payloads) ~= "table" then
+    warn("Failed to load Payloads:", Payloads)
+    Payloads = {}
+end
+
+for _, data in ipairs(Payloads) do
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, -10, 0, 35)
+    Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    Btn.Text = tostring(data[1])
+    Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Btn.TextSize = 12
+    Btn.Font = Enum.Font.GothamSemibold
+    Btn.Parent = ScrollFrame
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+
+    Btn.MouseButton1Click:Connect(function()
+        PlayClick()
+        local url = data[2]
+
+        task.spawn(function()
+            local ok, err = pcall(function()
+                local source = game:HttpGet(url)
+                local func = loadstring(source)
+                if func then
+                    func()
+                end
+            end)
+            if not ok then
+                warn("Payload failed:", data[1], err)
+            end
+        end)
+    end)
+end
+
+-- Button logic
+MinimizeBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    ReopenBtn.Visible = true
+end)
+
+ReopenBtn.MouseButton1Click:Connect(function()
+    ReopenBtn.Visible = false
+    MainFrame.Visible = true
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    ConfirmFrame.Visible = true
+end)
+
+NoBtn.MouseButton1Click:Connect(function()
+    ConfirmFrame.Visible = false
+end)
+
+YesBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
