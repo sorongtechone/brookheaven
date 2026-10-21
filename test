@@ -1,6 +1,5 @@
--- BROOKHAVEN AVATAR INSPECTOR (REWRITE FINAL baruj)
--- Fix: scroll stabil (CanvasSize manual + TextService), ID 0 = "tidak diset",
--- scan bertahap (flush per bagian), layout rapi.
+-- BROOKHAVEN AVATAR INSPECTOR v1.2
+-- Panel diperkecil ±50%, scroll stabil, ID 0 = "tidak diset".
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -23,7 +22,7 @@ local function create(class, props, parent)
 end
 
 local function corner(o, r)
-    create("UICorner", { CornerRadius = UDim.new(0, r or 8) }, o)
+    create("UICorner", { CornerRadius = UDim.new(0, r or 4) }, o)
 end
 
 local function stroke(o, c, t)
@@ -55,49 +54,50 @@ local gui = create("ScreenGui", {
 }, CoreGui)
 if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
+-- v1.2: 390x260 (sebelumnya 780x520)
 local main = create("Frame", {
     Name = "Main",
-    Size = UDim2.new(0, 780, 0, 520),
-    Position = UDim2.new(0.5, -390, 0.5, -260),
+    Size = UDim2.new(0, 390, 0, 260),
+    Position = UDim2.new(0.5, -195, 0.5, -130),
     BackgroundColor3 = Color3.fromRGB(19, 23, 33),
     BorderSizePixel = 0,
     Active = true,
 }, gui)
-corner(main, 10)
+corner(main, 6)
 stroke(main)
 
 -- ===== Header =====
 local header = create("Frame", {
-    Size = UDim2.new(1, 0, 0, 42),
+    Size = UDim2.new(1, 0, 0, 24),
     BackgroundColor3 = Color3.fromRGB(30, 38, 55),
     BorderSizePixel = 0,
     Active = true,
 }, main)
-corner(header, 10)
+corner(header, 6)
 
 create("TextLabel", {
-    Size = UDim2.new(1, -60, 1, 0),
-    Position = UDim2.new(0, 12, 0, 0),
+    Size = UDim2.new(1, -36, 1, 0),
+    Position = UDim2.new(0, 8, 0, 0),
     BackgroundTransparency = 1,
     Text = "BROOKHAVEN | AVATAR INSPECTOR",
     TextColor3 = Color3.fromRGB(220, 235, 255),
-    TextSize = 14,
+    TextSize = 10,
     Font = Enum.Font.GothamBold,
     TextXAlignment = Enum.TextXAlignment.Left,
 }, header)
 
 local closeBtn = create("TextButton", {
-    Size = UDim2.new(0, 32, 0, 28),
-    Position = UDim2.new(1, -40, 0, 7),
+    Size = UDim2.new(0, 20, 0, 16),
+    Position = UDim2.new(1, -24, 0, 4),
     BackgroundColor3 = Color3.fromRGB(150, 55, 65),
     TextColor3 = Color3.fromRGB(255, 240, 240),
     Text = "X",
-    TextSize = 13,
+    TextSize = 10,
     Font = Enum.Font.GothamBold,
     BorderSizePixel = 0,
     AutoButtonColor = true,
 }, header)
-corner(closeBtn, 6)
+corner(closeBtn, 4)
 closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 
 -- ===== Drag =====
@@ -135,69 +135,68 @@ end
 
 -- ===== Panels =====
 local left = create("Frame", {
-    Position = UDim2.new(0, 10, 0, 52),
-    Size = UDim2.new(0, 225, 1, -62),
+    Position = UDim2.new(0, 6, 0, 30),
+    Size = UDim2.new(0, 112, 1, -36),
     BackgroundColor3 = Color3.fromRGB(25, 30, 43),
     BorderSizePixel = 0,
 }, main)
-corner(left, 8)
+corner(left, 5)
 
 local right = create("Frame", {
-    Position = UDim2.new(0, 245, 0, 52),
-    Size = UDim2.new(1, -255, 1, -62),
+    Position = UDim2.new(0, 124, 0, 30),
+    Size = UDim2.new(1, -130, 1, -36),
     BackgroundColor3 = Color3.fromRGB(25, 30, 43),
     BorderSizePixel = 0,
 }, main)
-corner(right, 8)
+corner(right, 5)
 
 -- ===== Left: Player Selector =====
 create("TextLabel", {
-    Position = UDim2.new(0, 10, 0, 7),
-    Size = UDim2.new(1, -20, 0, 20),
+    Position = UDim2.new(0, 6, 0, 4),
+    Size = UDim2.new(1, -12, 0, 12),
     BackgroundTransparency = 1,
     Text = "PILIH PLAYER",
     TextColor3 = Color3.fromRGB(160, 200, 255),
     Font = Enum.Font.GothamBold,
-    TextSize = 13,
+    TextSize = 9,
     TextXAlignment = Enum.TextXAlignment.Left,
 }, left)
 
 local search = create("TextBox", {
-    Position = UDim2.new(0, 10, 0, 30),
-    Size = UDim2.new(1, -20, 0, 28),
+    Position = UDim2.new(0, 6, 0, 17),
+    Size = UDim2.new(1, -12, 0, 16),
     BackgroundColor3 = Color3.fromRGB(36, 43, 60),
     TextColor3 = Color3.fromRGB(245, 245, 255),
     PlaceholderColor3 = Color3.fromRGB(145, 155, 175),
-    PlaceholderText = "Cari nama pemain...",
+    PlaceholderText = "Cari nama...",
     Text = "",
     ClearTextOnFocus = false,
     Font = Enum.Font.Gotham,
-    TextSize = 12,
+    TextSize = 9,
     BorderSizePixel = 0,
 }, left)
-corner(search, 6)
+corner(search, 4)
 
 local refresh = create("TextButton", {
-    Size = UDim2.new(1, -20, 0, 26),
-    Position = UDim2.new(0, 10, 0, 64),
+    Size = UDim2.new(1, -12, 0, 16),
+    Position = UDim2.new(0, 6, 0, 35),
     BackgroundColor3 = Color3.fromRGB(43, 53, 72),
     TextColor3 = Color3.fromRGB(240, 244, 255),
     Text = "REFRESH PLAYER",
-    TextSize = 12,
+    TextSize = 9,
     Font = Enum.Font.GothamSemibold,
     BorderSizePixel = 0,
     AutoButtonColor = true,
 }, left)
-corner(refresh, 6)
+corner(refresh, 4)
 
--- Player scroll (CanvasSize manual)
 local playerScroll = create("ScrollingFrame", {
     Name = "PlayerScroll",
-    Position = UDim2.new(0, 8, 0, 98),
-    Size = UDim2.new(1, -16, 1, -106),
+    Position = UDim2.new(0, 5, 0, 54),
+    Size = UDim2.new(1, -10, 1, -60),
     BackgroundColor3 = Color3.fromRGB(20, 25, 36),
     BorderSizePixel = 0,
-    ScrollBarThickness = 7,
+    ScrollBarThickness = 5,
     ScrollBarImageColor3 = Color3.fromRGB(110, 145, 195),
     CanvasSize = UDim2.new(0, 0, 0, 0),
     ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -206,17 +205,17 @@ local playerScroll = create("ScrollingFrame", {
     Active = true,
     Selectable = true,
 }, left)
-corner(playerScroll, 6)
+corner(playerScroll, 4)
 
 local playerPad = create("UIPadding", {
-    PaddingTop = UDim.new(0, 6),
-    PaddingBottom = UDim.new(0, 6),
-    PaddingLeft = UDim.new(0, 5),
-    PaddingRight = UDim.new(0, 5),
+    PaddingTop = UDim.new(0, 4),
+    PaddingBottom = UDim.new(0, 4),
+    PaddingLeft = UDim.new(0, 3),
+    PaddingRight = UDim.new(0, 3),
 }, playerScroll)
 
 local playerLayout = create("UIListLayout", {
-    Padding = UDim.new(0, 5),
+    Padding = UDim.new(0, 3),
     SortOrder = Enum.SortOrder.Name,
 }, playerScroll)
 
@@ -232,38 +231,37 @@ playerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updatePlaye
 
 -- ===== Right: Detail =====
 local selectedLabel = create("TextLabel", {
-    Position = UDim2.new(0, 12, 0, 6),
-    Size = UDim2.new(1, -125, 0, 26),
+    Position = UDim2.new(0, 7, 0, 3),
+    Size = UDim2.new(1, -68, 0, 14),
     BackgroundTransparency = 1,
     Text = "Pilih pemain untuk memulai",
     TextColor3 = Color3.fromRGB(160, 200, 255),
     Font = Enum.Font.GothamBold,
-    TextSize = 13,
+    TextSize = 9,
     TextXAlignment = Enum.TextXAlignment.Left,
     TextTruncate = Enum.TextTruncate.AtEnd,
 }, right)
 
 local scanBtn = create("TextButton", {
-    Size = UDim2.new(0, 100, 0, 26),
-    Position = UDim2.new(1, -112, 0, 6),
+    Size = UDim2.new(0, 56, 0, 14),
+    Position = UDim2.new(1, -62, 0, 3),
     BackgroundColor3 = Color3.fromRGB(43, 53, 72),
     TextColor3 = Color3.fromRGB(240, 244, 255),
     Text = "SCAN ULANG",
-    TextSize = 12,
+    TextSize = 8,
     Font = Enum.Font.GothamSemibold,
     BorderSizePixel = 0,
     AutoButtonColor = true,
 }, right)
-corner(scanBtn, 6)
+corner(scanBtn, 4)
 
--- Detail scroll (CanvasSize manual, text diukur pakai TextService)
 local detailScroll = create("ScrollingFrame", {
     Name = "DetailScroll",
-    Position = UDim2.new(0, 8, 0, 38),
-    Size = UDim2.new(1, -16, 1, -46),
+    Position = UDim2.new(0, 5, 0, 21),
+    Size = UDim2.new(1, -10, 1, -26),
     BackgroundColor3 = Color3.fromRGB(20, 25, 36),
     BorderSizePixel = 0,
-    ScrollBarThickness = 8,
+    ScrollBarThickness = 5,
     ScrollBarImageColor3 = Color3.fromRGB(110, 145, 195),
     CanvasSize = UDim2.new(0, 0, 0, 0),
     ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -272,13 +270,13 @@ local detailScroll = create("ScrollingFrame", {
     Active = true,
     Selectable = true,
 }, right)
-corner(detailScroll, 6)
+corner(detailScroll, 4)
 
 local detailPad = create("UIPadding", {
-    PaddingTop = UDim.new(0, 8),
-    PaddingBottom = UDim.new(0, 8),
-    PaddingLeft = UDim.new(0, 10),
-    PaddingRight = UDim.new(0, 10),
+    PaddingTop = UDim.new(0, 4),
+    PaddingBottom = UDim.new(0, 4),
+    PaddingLeft = UDim.new(0, 5),
+    PaddingRight = UDim.new(0, 5),
 }, detailScroll)
 
 local detailText = create("TextLabel", {
@@ -287,7 +285,7 @@ local detailText = create("TextLabel", {
     BackgroundTransparency = 1,
     Text = "Pilih pemain dari daftar di sebelah kiri.",
     TextColor3 = Color3.fromRGB(225, 230, 242),
-    TextSize = 12,
+    TextSize = 8,
     Font = Enum.Font.Code,
     TextWrapped = true,
     TextXAlignment = Enum.TextXAlignment.Left,
@@ -304,7 +302,7 @@ local function updateDetailCanvas()
         detailText.Text, detailText.TextSize, detailText.Font,
         Vector2.new(w, math.huge)
     )
-    local h = bounds.Y + 4
+    local h = bounds.Y + 2
     detailText.Size = UDim2.new(1, 0, 0, h)
     detailScroll.CanvasSize = UDim2.new(
         0, 0,
@@ -604,19 +602,19 @@ local function refreshPlayers()
     for _, p in ipairs(list) do
         local b = create("TextButton", {
             Name = "Player_" .. p.Name,
-            Size = UDim2.new(1, 0, 0, 32),
+            Size = UDim2.new(1, 0, 0, 18),
             BackgroundColor3 = Color3.fromRGB(39, 48, 66),
             TextColor3 = Color3.fromRGB(235, 240, 255),
             Text = p.DisplayName .. "  (@" .. p.Name .. ")",
-            TextSize = 11,
+            TextSize = 8,
             Font = Enum.Font.Gotham,
             TextTruncate = Enum.TextTruncate.AtEnd,
             TextXAlignment = Enum.TextXAlignment.Left,
             BorderSizePixel = 0,
             AutoButtonColor = true,
         }, playerScroll)
-        corner(b, 5)
-        create("UIPadding", { PaddingLeft = UDim.new(0, 8) }, b)
+        corner(b, 3)
+        create("UIPadding", { PaddingLeft = UDim.new(0, 5) }, b)
         playerButtons[p] = b
         b.MouseButton1Click:Connect(function() scanPlayer(p) end)
     end
@@ -672,3 +670,7 @@ detailText.Text =
     "di bagian paling bawah.\n\n" ..
     "Catatan: ID yang bernilai 0 berarti field HumanoidDescription " ..
     "tersebut tidak diset oleh pemain (bukan bug scan)."
+
+-- Safety init
+task.defer(updateDetailCanvas)
+task.defer(updatePlayerCanvas)
