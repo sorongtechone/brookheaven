@@ -1,0 +1,574 @@
+
+--==================================================
+-- DELTA SCRIPT MONITOR
+-- ACTIVITY | SOURCE VIEW | DETAILS
+--==================================================
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+
+-- Cleanup versi sebelumnya
+pcall(function()
+    local old = CoreGui:FindFirstChild("DeltaScriptMonitor")
+    if old then old:Destroy() end
+end)
+
+pcall(function()
+    local old = player.PlayerGui:FindFirstChild("DeltaScriptMonitor")
+    if old then old:Destroy() end
+end)
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "DeltaScriptMonitor"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local parentOK = pcall(function()
+    gui.Parent = CoreGui
+end)
+
+if not parentOK or not gui.Parent then
+    gui.Parent = player:WaitForChild("PlayerGui")
+end
+
+local function create(class, props, parent)
+    local obj = Instance.new(class)
+    for k, v in pairs(props or {}) do
+        obj[k] = v
+    end
+    obj.Parent = parent
+    return obj
+end
+
+local function corner(obj, radius)
+    create("UICorner", {
+        CornerRadius = UDim.new(0, radius or 6)
+    }, obj)
+end
+
+local function outline(obj)
+    create("UIStroke", {
+        Color = Color3.fromRGB(65, 75, 95),
+        Thickness = 1
+    }, obj)
+end
+
+local function json(value)
+    local ok, result = pcall(function()
+        return HttpService:JSONEncode(value)
+    end)
+
+    if ok then
+        return result
+    end
+
+    return tostring(value)
+end
+
+local function serialize(value, depth)
+    depth = depth or 0
+
+    if depth > 4 then
+        return "<maximum depth>"
+    end
+
+    local kind = typeof(value)
+
+    if kind == "nil" or kind == "boolean"
+        or kind == "number" or kind == "string" then
+        return tostring(value)
+    end
+
+    if kind == "Instance" then
+        return value:GetFullName()
+    end
+
+    if kind == "Vector3" or kind == "Vector2"
+        or kind == "CFrame" or kind == "Color3" then
+        return tostring(value)
+    end
+
+    if kind == "table" then
+        local output = {}
+        local count = 0
+
+        for k, v in pairs(value) do
+            count += 1
+            if count > 60 then
+                table.insert(output, "... truncated")
+                break
+            end
+
+            table.insert(output,
+                "[" .. serialize(k, depth + 1) .. "] = "
+                .. serialize(v, depth + 1)
+            )
+        end
+
+        return "{\n  " .. table.concat(output, ",\n  ") .. "\n}"
+    end
+
+    return tostring(value)
+end
+
+-- Monitor API
+local Monitor = {}
+Monitor.entries = {}
+Monitor.maxEntries = 150
+Monitor.nextId = 0
+Monitor.onChange = nil
+
+function Monitor.log(kind, name, detail)
+    Monitor.nextId += 1
+
+    local entry = {
+        id = Monitor.nextId,
+        time = os.date("%H:%M:%S"),
+        kind = tostring(kind or "INFO"),
+        name = tostring(name or ""),
+        detail = serialize(detail)
+    }
+
+    table.insert(Monitor.entries, entry)
+
+    while #Monitor.entries > Monitor.maxEntries do
+        table.remove(Monitor.entries, 1)
+    end
+
+    if Monitor.onChange then
+        pcall(Monitor.onChange, entry)
+    end
+
+    return entry
+end
+
+function Monitor.wrap(name, fn)
+    assert(type(fn) == "function", "Expected a function")
+
+    return function(...)
+        local args = table.pack(...)
+
+        Monitor.log("CALL", name, {
+            args = args
+        })
+
+        local result = table.pack(pcall(function()
+            return fn(table.unpack(args, 1, args.n))
+        end))
+
+        if not result[1] then
+            Monitor.log("ERROR", name, result[2])
+            error(result[2], 0)
+        end
+
+        local returned = table.pack(
+            table.unpack(result, 2, result.n)
+        )
+
+        Monitor.log("RETURN", name, {
+            values = returned
+        })
+
+        return table.unpack(returned, 1, returned.n)
+    end
+end
+
+_G.DeltaMonitor = Monitor
+
+-- GUI layout
+local main = create("Frame", {
+    Name = "Main",
+    Size = UDim2.new(0, 650, 0, 440),
+    Position = UDim2.new(0.5, -325, 0.5, -220),
+    BackgroundColor3 = Color3.fromRGB(20, 23, 31),
+    BorderSizePixel = 0,
+    ClipsDescendants = true
+}, gui)
+
+corner(main, 10)
+outline(main)
+
+local header = create("Frame", {
+    Size = UDim2.new(1, 0, 0, 42),
+    BackgroundColor3 = Color3.fromRGB(29, 34, 46),
+    BorderSizePixel = 0
+}, main)
+
+local title = create("TextLabel", {
+    Position = UDim2.new(0, 12, 0, 0),
+    Size = UDim2.new(1, -150, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "DELTA SCRIPT MONITOR",
+    TextColor3 = Color3.fromRGB(105, 190, 255),
+    Font = Enum.Font.GothamBold,
+    TextSize = 15,
+    TextXAlignment = Enum.TextXAlignment.Left
+}, header)
+
+local function makeButton(parent, text, x, width)
+    local b = create("TextButton", {
+        Position = UDim2.new(1, x, 0, 7),
+        Size = UDim2.new(0, width, 0, 28),
+        BackgroundColor3 = Color3.fromRGB(47, 55, 72),
+        Text = text,
+        TextColor3 = Color3.new(1, 1, 1),
+        Font = Enum.Font.Gotham,
+        TextSize = 12,
+        BorderSizePixel = 0
+    }, parent)
+
+    corner(b, 5)
+    return b
+end
+
+local closeButton = makeButton(header, "X", -38, 28)
+local minimizeButton = makeButton(header, "-", -73, 28)
+
+closeButton.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end)
+
+-- Drag window
+do
+    local dragging = false
+    local dragStart, startPosition
+
+    header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPosition = main.Position
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (
+            input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch
+        ) then
+            local delta = input.Position - dragStart
+
+            main.Position = UDim2.new(
+                startPosition.X.Scale,
+                startPosition.X.Offset + delta.X,
+                startPosition.Y.Scale,
+                startPosition.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+local minimized = false
+
+minimizeButton.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    main.Size = minimized
+        and UDim2.new(0, 650, 0, 42)
+        or UDim2.new(0, 650, 0, 440)
+    minimizeButton.Text = minimized and "+" or "-"
+end)
+
+local tabs = create("Frame", {
+    Position = UDim2.new(0, 8, 0, 49),
+    Size = UDim2.new(1, -16, 0, 34),
+    BackgroundTransparency = 1
+}, main)
+
+local content = create("Frame", {
+    Position = UDim2.new(0, 8, 0, 90),
+    Size = UDim2.new(1, -16, 1, -98),
+    BackgroundColor3 = Color3.fromRGB(25, 29, 39),
+    BorderSizePixel = 0
+}, main)
+
+corner(content, 6)
+
+local activityPage = create("Frame", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1
+}, content)
+
+local sourcePage = create("Frame", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Visible = false
+}, content)
+
+local detailsPage = create("Frame", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Visible = false
+}, content)
+
+local pages = {
+    ACTIVITY = activityPage,
+    ["SOURCE VIEW"] = sourcePage,
+    DETAILS = detailsPage
+}
+
+local activeTab = "ACTIVITY"
+
+local function switchTab(name)
+    activeTab = name
+
+    for tabName, page in pairs(pages) do
+        page.Visible = tabName == name
+    end
+end
+
+local tabNames = {"ACTIVITY", "SOURCE VIEW", "DETAILS"}
+
+for i, name in ipairs(tabNames) do
+    local b = create("TextButton", {
+        Position = UDim2.new(0, (i - 1) * 145, 0, 0),
+        Size = UDim2.new(0, 140, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(43, 51, 68),
+        Text = name,
+        TextColor3 = Color3.new(1, 1, 1),
+        Font = Enum.Font.GothamBold,
+        TextSize = 12,
+        BorderSizePixel = 0
+    }, tabs)
+
+    corner(b, 5)
+
+    b.MouseButton1Click:Connect(function()
+        switchTab(name)
+    end)
+end
+
+-- ACTIVITY
+local toolbar = create("Frame", {
+    Position = UDim2.new(0, 7, 0, 7),
+    Size = UDim2.new(1, -14, 0, 30),
+    BackgroundTransparency = 1
+}, activityPage)
+
+local countLabel = create("TextLabel", {
+    Size = UDim2.new(0.5, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "Entries: 0/150",
+    TextColor3 = Color3.fromRGB(190, 200, 215),
+    Font = Enum.Font.Gotham,
+    TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left
+}, toolbar)
+
+local clearButton = create("TextButton", {
+    Position = UDim2.new(1, -150, 0, 0),
+    Size = UDim2.new(0, 70, 1, 0),
+    BackgroundColor3 = Color3.fromRGB(125, 57, 62),
+    Text = "CLEAR",
+    TextColor3 = Color3.new(1, 1, 1),
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+    BorderSizePixel = 0
+}, toolbar)
+
+local copyButton = create("TextButton", {
+    Position = UDim2.new(1, -74, 0, 0),
+    Size = UDim2.new(0, 70, 1, 0),
+    BackgroundColor3 = Color3.fromRGB(48, 93, 130),
+    Text = "COPY",
+    TextColor3 = Color3.new(1, 1, 1),
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+    BorderSizePixel = 0
+}, toolbar)
+
+local activityScroll = create("ScrollingFrame", {
+    Position = UDim2.new(0, 7, 0, 43),
+    Size = UDim2.new(1, -14, 1, -50),
+    BackgroundColor3 = Color3.fromRGB(18, 21, 29),
+    BorderSizePixel = 0,
+    ScrollBarThickness = 7,
+    CanvasSize = UDim2.new(0, 0, 0, 0),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y
+}, activityPage)
+
+local activityLayout = create("UIListLayout", {
+    Padding = UDim.new(0, 4),
+    SortOrder = Enum.SortOrder.LayoutOrder
+}, activityScroll)
+
+create("UIPadding", {
+    PaddingTop = UDim.new(0, 5),
+    PaddingLeft = UDim.new(0, 5),
+    PaddingRight = UDim.new(0, 5),
+    PaddingBottom = UDim.new(0, 5)
+}, activityScroll)
+
+-- DETAILS
+local detailsText = create("TextBox", {
+    Position = UDim2.new(0, 8, 0, 8),
+    Size = UDim2.new(1, -16, 1, -16),
+    BackgroundColor3 = Color3.fromRGB(17, 20, 27),
+    TextColor3 = Color3.fromRGB(220, 228, 240),
+    PlaceholderText = "Klik entri di ACTIVITY untuk melihat detail.",
+    PlaceholderColor3 = Color3.fromRGB(130, 140, 155),
+    Text = "",
+    TextSize = 13,
+    Font = Enum.Font.Code,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = false,
+    MultiLine = true,
+    ClearTextOnFocus = false
+}, detailsPage)
+
+-- SOURCE VIEW
+local sourceBox = create("TextBox", {
+    Position = UDim2.new(0, 8, 0, 8),
+    Size = UDim2.new(1, -16, 1, -50),
+    BackgroundColor3 = Color3.fromRGB(17, 20, 27),
+    TextColor3 = Color3.fromRGB(190, 220, 195),
+    PlaceholderText = "Tempel source Lua di sini untuk diperiksa...",
+    PlaceholderColor3 = Color3.fromRGB(130, 140, 155),
+    Text = "",
+    TextSize = 12,
+    Font = Enum.Font.Code,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = false,
+    MultiLine = true,
+    ClearTextOnFocus = false
+}, sourcePage)
+
+local sourceStatus = create("TextLabel", {
+    Position = UDim2.new(0, 8, 1, -34),
+    Size = UDim2.new(1, -16, 0, 25),
+    BackgroundTransparency = 1,
+    Text = "Source manual | 0 characters",
+    TextColor3 = Color3.fromRGB(160, 175, 195),
+    TextSize = 11,
+    Font = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left
+}, sourcePage)
+
+sourceBox:GetPropertyChangedSignal("Text"):Connect(function()
+    sourceStatus.Text = "Source manual | "
+        .. #sourceBox.Text .. " characters"
+end)
+
+local rows = {}
+
+local function showDetails(entry)
+    detailsText.Text = table.concat({
+        "ID: " .. entry.id,
+        "TIME: " .. entry.time,
+        "TYPE: " .. entry.kind,
+        "NAME: " .. entry.name,
+        "",
+        "DETAIL:",
+        entry.detail
+    }, "\n")
+
+    switchTab("DETAILS")
+end
+
+local function rebuildActivity()
+    for _, child in ipairs(activityScroll:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    rows = {}
+
+    for _, entry in ipairs(Monitor.entries) do
+        local row = create("TextButton", {
+            Size = UDim2.new(1, -4, 0, 31),
+            BackgroundColor3 = Color3.fromRGB(36, 42, 55),
+            Text = string.format(
+                "[%s] #%d  %-7s  %s",
+                entry.time, entry.id, entry.kind, entry.name
+            ),
+            TextColor3 = entry.kind == "ERROR"
+                and Color3.fromRGB(255, 120, 120)
+                or Color3.fromRGB(220, 228, 240),
+            TextSize = 11,
+            Font = Enum.Font.Code,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            BorderSizePixel = 0,
+            LayoutOrder = entry.id
+        }, activityScroll)
+
+        corner(row, 4)
+
+        row.MouseButton1Click:Connect(function()
+            showDetails(entry)
+        end)
+
+        table.insert(rows, row)
+    end
+
+    countLabel.Text = string.format(
+        "Entries: %d/%d",
+        #Monitor.entries,
+        Monitor.maxEntries
+    )
+end
+
+Monitor.onChange = function()
+    rebuildActivity()
+end
+
+clearButton.MouseButton1Click:Connect(function()
+    table.clear(Monitor.entries)
+    rebuildActivity()
+    detailsText.Text = ""
+    Monitor.log("INFO", "Monitor", "Activity log cleared")
+end)
+
+copyButton.MouseButton1Click:Connect(function()
+    local output = {}
+
+    for _, entry in ipairs(Monitor.entries) do
+        table.insert(output, string.format(
+            "[%s] #%d %s %s\n%s",
+            entry.time, entry.id, entry.kind,
+            entry.name, entry.detail
+        ))
+    end
+
+    local textToCopy = table.concat(output, "\n\n")
+
+    local ok = pcall(function()
+        if type(setclipboard) ~= "function" then
+            error("Clipboard API unavailable")
+        end
+
+        setclipboard(textToCopy)
+    end)
+
+    Monitor.log("INFO", "Copy", ok
+        and "Log copied to clipboard"
+        or "Clipboard unavailable in this environment")
+end)
+
+-- Initial entries
+Monitor.log("INFO", "Monitor", "GUI initialized")
+Monitor.log("INFO", "Instrumentation",
+    "Only calls explicitly passed through Monitor.wrap are captured")
+Monitor.log("INFO", "Source View",
+    "Paste source manually; this panel does not extract other scripts")
+
+-- Example usage:
+-- local monitoredFunction = Monitor.wrap("Example", function(a, b)
+--     return a + b
+-- end)
+-- monitoredFunction(10, 20)
+
+rebuildActivity()
