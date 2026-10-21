@@ -7,7 +7,6 @@ print("   RGB + Target + Orbit + Figure + Structure + Recolor + World")
 print("============================================================")
 print("[Rubo Hub] Loaded v2.0 - Delta | Brookhaven ready | Pro enabled")
 
--- Unload previous instance safely
 if getgenv().RuboUnload then pcall(getgenv().RuboUnload) end
 
 --[[ ============================ 1. SERVICES ============================ ]]
