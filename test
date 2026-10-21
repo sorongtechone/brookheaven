@@ -1,9 +1,10 @@
--- BROOKHAVEN AVATAR INSPECTOR (REWRITE)
--- Fix: ID 0 ditampilkan sebagai "0 (tidak diset)", scan di-yield per bagian,
--- scroll pakai AutomaticCanvasSize saja, layout rapi.
+-- BROOKHAVEN AVATAR INSPECTOR (REWRITE FINAL)
+-- Fix: scroll stabil (CanvasSize manual + TextService), ID 0 = "tidak diset",
+-- scan bertahap (flush per bagian), layout rapi.
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local TextService = game:GetService("TextService")
 local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
@@ -189,7 +190,7 @@ local refresh = create("TextButton", {
 }, left)
 corner(refresh, 6)
 
--- Scroll: pakai AutomaticCanvasSize SAJA, tidak ada CanvasSize manual
+-- Player scroll (CanvasSize manual)
 local playerScroll = create("ScrollingFrame", {
     Name = "PlayerScroll",
     Position = UDim2.new(0, 8, 0, 98),
@@ -199,7 +200,6 @@ local playerScroll = create("ScrollingFrame", {
     ScrollBarThickness = 7,
     ScrollBarImageColor3 = Color3.fromRGB(110, 145, 195),
     CanvasSize = UDim2.new(0, 0, 0, 0),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
     ScrollingDirection = Enum.ScrollingDirection.Y,
     ScrollingEnabled = true,
     ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
@@ -208,17 +208,27 @@ local playerScroll = create("ScrollingFrame", {
 }, left)
 corner(playerScroll, 6)
 
-create("UIPadding", {
+local playerPad = create("UIPadding", {
     PaddingTop = UDim.new(0, 6),
     PaddingBottom = UDim.new(0, 6),
     PaddingLeft = UDim.new(0, 5),
     PaddingRight = UDim.new(0, 5),
 }, playerScroll)
 
-create("UIListLayout", {
+local playerLayout = create("UIListLayout", {
     Padding = UDim.new(0, 5),
     SortOrder = Enum.SortOrder.Name,
 }, playerScroll)
+
+local function updatePlayerCanvas()
+    playerScroll.CanvasSize = UDim2.new(
+        0, 0,
+        0, playerLayout.AbsoluteContentSize.Y
+            + playerPad.PaddingTop.Offset
+            + playerPad.PaddingBottom.Offset
+    )
+end
+playerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updatePlayerCanvas)
 
 -- ===== Right: Detail =====
 local selectedLabel = create("TextLabel", {
@@ -246,6 +256,7 @@ local scanBtn = create("TextButton", {
 }, right)
 corner(scanBtn, 6)
 
+-- Detail scroll (CanvasSize manual, text diukur pakai TextService)
 local detailScroll = create("ScrollingFrame", {
     Name = "DetailScroll",
     Position = UDim2.new(0, 8, 0, 38),
@@ -255,7 +266,6 @@ local detailScroll = create("ScrollingFrame", {
     ScrollBarThickness = 8,
     ScrollBarImageColor3 = Color3.fromRGB(110, 145, 195),
     CanvasSize = UDim2.new(0, 0, 0, 0),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
     ScrollingDirection = Enum.ScrollingDirection.Y,
     ScrollingEnabled = true,
     ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
@@ -264,7 +274,7 @@ local detailScroll = create("ScrollingFrame", {
 }, right)
 corner(detailScroll, 6)
 
-create("UIPadding", {
+local detailPad = create("UIPadding", {
     PaddingTop = UDim.new(0, 8),
     PaddingBottom = UDim.new(0, 8),
     PaddingLeft = UDim.new(0, 10),
@@ -274,7 +284,6 @@ create("UIPadding", {
 local detailText = create("TextLabel", {
     Name = "DetailText",
     Size = UDim2.new(1, 0, 0, 0),
-    AutomaticSize = Enum.AutomaticSize.Y,
     BackgroundTransparency = 1,
     Text = "Pilih pemain dari daftar di sebelah kiri.",
     TextColor3 = Color3.fromRGB(225, 230, 242),
@@ -285,6 +294,33 @@ local detailText = create("TextLabel", {
     TextYAlignment = Enum.TextYAlignment.Top,
     RichText = false,
 }, detailScroll)
+
+local function updateDetailCanvas()
+    local w = detailScroll.AbsoluteSize.X
+        - detailPad.PaddingLeft.Offset
+        - detailPad.PaddingRight.Offset
+    if w <= 0 then return end
+    local bounds = TextService:GetTextSize(
+        detailText.Text, detailText.TextSize, detailText.Font,
+        Vector2.new(w, math.huge)
+    )
+    local h = bounds.Y + 4
+    detailText.Size = UDim2.new(1, 0, 0, h)
+    detailScroll.CanvasSize = UDim2.new(
+        0, 0,
+        0, h + detailPad.PaddingTop.Offset + detailPad.PaddingBottom.Offset
+    )
+end
+
+detailScroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+    task.defer(updateDetailCanvas)
+end)
+detailText:GetPropertyChangedSignal("Text"):Connect(function()
+    task.defer(updateDetailCanvas)
+end)
+detailText:GetPropertyChangedSignal("TextSize"):Connect(function()
+    task.defer(updateDetailCanvas)
+end)
 
 -- ===== State =====
 local selectedPlayer = nil
@@ -585,6 +621,7 @@ local function refreshPlayers()
         b.MouseButton1Click:Connect(function() scanPlayer(p) end)
     end
     playerScroll.CanvasPosition = Vector2.new(0, 0)
+    updatePlayerCanvas()
 end
 
 local function filterPlayers()
@@ -598,6 +635,7 @@ local function filterPlayers()
             b.Visible = false
         end
     end
+    updatePlayerCanvas()
 end
 
 refresh.MouseButton1Click:Connect(function() refreshPlayers(); filterPlayers() end)
