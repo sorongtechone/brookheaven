@@ -1,4 +1,4 @@
--- BROOKHAVEN AVATAR INSPECTOR (REWRITE FINAL)
+-- BROOKHAVEN AVATAR INSPECTOR (REWRITE FINAL baruj)
 -- Fix: scroll stabil (CanvasSize manual + TextService), ID 0 = "tidak diset",
 -- scan bertahap (flush per bagian), layout rapi.
 
