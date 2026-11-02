@@ -27,6 +27,8 @@ local songs = {
     {"Sekadung - Kading", "96886868331501"},
     {"Malu Malu", "110273485966406"},
     {"DJ Akimilaku", "124582101215124"},
+    {"Monitor", "124582101215124"},
+    {"Mangkane", "90145710334449"},
 }
 
 -- MUSIC CONTROL
