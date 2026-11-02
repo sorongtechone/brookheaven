@@ -30,8 +30,8 @@ local songs = {
     {"Monitor", "124582101215124"},
     {"Jika tidak Hari ini", "96077163288111"},
     {"Mangkane", "90145710334449"},
-    {"Hidup Jokowi", "71501562798859 "},
-    {"Hidup Lonte", "101413788093101  "},
+    {"Hidup Jokowi", "71501562798859"},
+    {"Hidup Lonte", "101413788093101"},
 }
 
 -- MUSIC CONTROL
