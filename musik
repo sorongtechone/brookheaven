@@ -28,7 +28,10 @@ local songs = {
     {"Malu Malu", "110273485966406"},
     {"DJ Akimilaku", "124582101215124"},
     {"Monitor", "124582101215124"},
+    {"Jika tidak Hari ini", "96077163288111"},
     {"Mangkane", "90145710334449"},
+    {"Hidup Jokowi", "71501562798859 "},
+    {"Hidup Lonte", "101413788093101  "},
 }
 
 -- MUSIC CONTROL
