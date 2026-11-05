@@ -1,9 +1,11 @@
 --====================================================
--- XLORD HUB V24 | BROOKHAVEN RP sekali
--- V24:
---   * XYZ toggle tunggal di header (tombol mengambang dihapus)
---   * Bersihkan ScreenGui XLORD lama saat load
---   * Panel MUSIK DIHAPUS (sesuai permintaan)
+-- XLORD HUB V25 | BROOKHAVEN RP
+-- V25:
+--   * Auto Sofa: unanchor seat, toleransi occupant telat, retry seat,
+--     tunggu Sit, approach BodyPosition samping, MAX_AUTO_WAIT 15s
+--   * Void: animasi lerp per-frame (FLIGHT_DURATION), easing quadIn, spin
+--   * 5 bayangan: clone visual mengepung target, pemenang terbang ke void
+--   * Semua fitur V24 dipertahankan
 --====================================================
 
 local Players = game:GetService("Players")
@@ -59,7 +61,6 @@ end
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
--- Bersihkan SEMUA sisa GUI XLORD (bukan hanya satu nama)
 for _, child in ipairs(playerGui:GetChildren()) do
     if child:IsA("ScreenGui") and (child.Name:find("XLORD") or child.Name:find("Xlord")) then
         child:Destroy()
@@ -133,7 +134,7 @@ round(main, 12)
 local header = Instance.new("TextLabel")
 header.Name = "DragHeader"
 header.BackgroundTransparency = 1
-header.Text = "XLORD | V24"
+header.Text = "XLORD | V25"
 header.TextXAlignment = Enum.TextXAlignment.Left
 header.TextColor3 = Color3.new(1, 1, 1)
 header.TextSize = 15
@@ -227,7 +228,7 @@ local trampolineButton = button(main, "Trampoline", "TRAMPOLINE (TEST)", Color3.
 local status = Instance.new("TextLabel")
 status.Name = "Status"
 status.BackgroundTransparency = 1
-status.Text = "XLORD V24 siap digunakan"
+status.Text = "XLORD V25 siap digunakan"
 status.TextColor3 = Color3.fromRGB(190, 194, 207)
 status.TextSize = 12
 status.Font = Enum.Font.Gotham
@@ -290,7 +291,7 @@ local function ensureOnScreen(object)
 end
 
 --====================================================
--- HUD KOORDINAT (diatur lewat tombol XYZ header)
+-- HUD KOORDINAT
 --====================================================
 local coordHUD = Instance.new("Frame")
 coordHUD.Name = "XLORD_Coordinates"
@@ -349,7 +350,6 @@ local function xyz(position)
         position.X, position.Y, position.Z)
 end
 
--- HUD selalu update, terlihat atau tidak (biar langsung ada data saat di-toggle ON)
 task.spawn(function()
     while gui.Parent do
         local character = localPlayer.Character
@@ -369,7 +369,6 @@ task.spawn(function()
     end
 end)
 
--- Toggle HUD lewat tombol XYZ di header
 local xyzHUDVisible = true
 local function applyXYZButton()
     xyzButton.BackgroundColor3 = xyzHUDVisible and COLORS.blue or COLORS.gray
@@ -389,7 +388,7 @@ local function applySize(newWidth, newHeight)
 
     header.Position = UDim2.fromOffset(12, 0)
     header.Size = UDim2.fromOffset(math.max(65, width - 340), 42)
-    header.Text = width < 320 and "XLORD" or "XLORD | V24"
+    header.Text = width < 320 and "XLORD" or "XLORD | V25"
 
     local sizeBtn = 30
     smaller.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
@@ -400,7 +399,6 @@ local function applySize(newWidth, newHeight)
     xyzButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
     antiSitButton.Size = UDim2.fromOffset(sizeBtn, sizeBtn)
 
-    -- Dari kanan ke kiri
     close.Position = UDim2.fromOffset(width - 42, 6)
     minimize.Position = UDim2.fromOffset(width - 76, 6)
     larger.Position = UDim2.fromOffset(width - 110, 6)
@@ -466,7 +464,6 @@ listen(antiSitButton.MouseButton1Click:Connect(function()
     end
 end))
 
--- Tombol XYZ header: toggle HUD koordinat (satu tombol saja)
 listen(xyzButton.MouseButton1Click:Connect(function()
     xyzHUDVisible = not xyzHUDVisible
     coordHUD.Visible = xyzHUDVisible
@@ -474,7 +471,6 @@ listen(xyzButton.MouseButton1Click:Connect(function()
     setStatus(xyzHUDVisible and "HUD koordinat ON" or "HUD koordinat OFF")
 end))
 
--- Tombol _ pada HUD: sembunyikan HUD, tombol XYZ header tetap ada sebagai toggle
 listen(coordHide.MouseButton1Click:Connect(function()
     coordHUD.Visible = false
     xyzHUDVisible = false
@@ -503,7 +499,7 @@ listen(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera))
 watchCamera()
 
 --====================================================
--- TELEPORT & AUTO SOFA (asli)
+-- TELEPORT & AUTO SOFA
 --====================================================
 local selectedPlayer
 local propTarget = nil
@@ -759,7 +755,21 @@ listen(localPlayer.CharacterAdded:Connect(function()
 end))
 
 --====================================================
--- AUTO SOFA (asli)
+-- KONFIGURASI AUTO SOFA (V25)
+--====================================================
+local MAX_AUTO_WAIT = 15.0                  -- diperpanjang dari 8s
+local AUTO_DESTINATION = Vector3.new(0, -800, 0)  -- dekat & kelihatan (jatuh ke bawah map)
+local FLIGHT_DURATION = 3.0                 -- durasi melayang ke void (detik)
+local FLIGHT_EASING = "quadIn"              -- "linear" | "quadIn" | "cubicIn" | "sineIn"
+local CLONE_COUNT = 5
+local CLONE_LIFETIME = 3.0
+local APPROACH_SIDE_OFFSET = 3.5            -- jarak samping saat approach
+local EARLY_EXIT_DISTANCE = 40.0            -- kalau target >40 studs, batal
+local SEAT_RETRY = 3
+local SEAT_RETRY_WAIT = 0.15
+
+--====================================================
+-- AUTO SOFA STATE
 --====================================================
 local flingRunning = false
 local flingToken = 0
@@ -767,7 +777,16 @@ local savedPivot = nil
 local flingCharacter = nil
 local pushForce = nil
 local spinForce = nil
+local approachForce = nil
 local activeCouchTool = nil
+local activeClones = {}
+
+local function clearClones()
+    for _, c in ipairs(activeClones) do
+        if c and c.Parent then pcall(function() c:Destroy() end) end
+    end
+    table.clear(activeClones)
+end
 
 local function releaseOwnCouch()
     if activeCouchTool and activeCouchTool.Parent then
@@ -788,7 +807,9 @@ local function stopFling(restore)
     flingRunning = false
     if pushForce then pushForce:Destroy(); pushForce = nil end
     if spinForce then spinForce:Destroy(); spinForce = nil end
+    if approachForce then approachForce:Destroy(); approachForce = nil end
     releaseOwnCouch()
+    clearClones()
     if restore and savedPivot and flingCharacter and flingCharacter.Parent
        and localPlayer.Character == flingCharacter then
         pcall(function()
@@ -838,21 +859,139 @@ local function teleportToSelected()
     setStatus("Teleport ke @" .. selectedPlayer.Name)
 end
 
-local MAX_AUTO_WAIT = 8.0
-local AUTO_DESTINATION = Vector3.new(-77817, 28186, 9001)
-local AUTO_SIDE_SPEED = 155
-local AUTO_DOWN_SPEED = 140
-local AUTO_SPIN_SPEED = 105
-
+--====================================================
+-- GET TARGET SEAT (V25: toleran anchored + occupant telat)
+--====================================================
 local function getTargetSeat(target)
     local character = target and target.Character
     local hum = character and character:FindFirstChildOfClass("Humanoid")
     if not hum or hum.Health <= 0 then return nil, "Target belum siap" end
     local seat = hum.SeatPart
-    if not seat or not (seat:IsA("Seat") or seat:IsA("VehicleSeat")) then return nil, "Target belum duduk di sofa" end
-    if not seat:IsDescendantOf(workspace) or seat.Occupant ~= hum then return nil, "Seat target tidak valid" end
-    if seat.Anchored then return nil, "Seat target Anchored" end
+    if not seat or not (seat:IsA("Seat") or seat:IsA("VehicleSeat")) then
+        return nil, "Target belum duduk di sofa"
+    end
+    if not seat:IsDescendantOf(workspace) then return nil, "Seat target tidak valid" end
+    -- Toleransi: Occupant boleh telat 1-2 frame
+    if seat.Occupant and seat.Occupant ~= hum then
+        return nil, "Seat diisi orang lain"
+    end
+    -- JANGAN reject Anchored — akan di-unanchor saat throw
     return seat
+end
+
+--====================================================
+-- APPROACH PAKAI BODYPOSITION (V25)
+--====================================================
+local function startApproach(root, targetRoot)
+    if approachForce then approachForce:Destroy(); approachForce = nil end
+    local bp = Instance.new("BodyPosition")
+    bp.Name = "XLORD_Approach"
+    bp.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    bp.P = 8000
+    bp.D = 500
+    bp.Position = root.Position
+    bp.Parent = root
+    approachForce = bp
+    return bp
+end
+
+--====================================================
+-- 5 BAYANGAN (CLONE VISUAL)
+--====================================================
+local function spawnShadowClones(targetChar)
+    clearClones()
+    local myChar = localPlayer.Character
+    if not myChar or not myChar.PrimaryPart then return end
+    local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then return end
+
+    for i = 1, CLONE_COUNT do
+        local clone = myChar:Clone()
+        for _, d in ipairs(clone:GetDescendants()) do
+            if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("Tool") then
+                d:Destroy()
+            end
+        end
+        clone.Name = "XLORD_Shadow_" .. i
+        for _, p in ipairs(clone:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.Anchored = true
+                p.CanCollide = false
+                p.Transparency = 0.35
+                p.Material = Enum.Material.ForceField
+                p.Color = Color3.fromRGB(140, 90, 255)
+            end
+        end
+        local cloneHum = clone:FindFirstChildOfClass("Humanoid")
+        if cloneHum then
+            cloneHum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        end
+
+        local angle = (i - 1) / CLONE_COUNT * math.pi * 2
+        local radius = 3.2
+        local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+        local spawnPos = targetRoot.Position + offset
+        local look = CFrame.lookAt(spawnPos, targetRoot.Position)
+        if clone.PrimaryPart then
+            clone:PivotTo(look)
+        else
+            clone:SetPrimaryPartCFrame(look)
+        end
+
+        clone.Parent = workspace
+        table.insert(activeClones, clone)
+    end
+    setStatus(CLONE_COUNT .. " bayangan muncul di sekitar target...")
+end
+
+local function pickWinningClone(targetChar)
+    local seat = nil
+    local hum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+    if hum then seat = hum.SeatPart end
+    local refPos = seat and seat.Position
+        or (targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+            and targetChar.HumanoidRootPart.Position)
+    if not refPos then return nil end
+    local best, bestDist = nil, math.huge
+    for _, clone in ipairs(activeClones) do
+        local cr = clone:FindFirstChild("HumanoidRootPart")
+        if cr then
+            local d = (cr.Position - refPos).Magnitude
+            if d < bestDist then bestDist = d; best = clone end
+        end
+    end
+    return best, bestDist
+end
+
+local function sendCloneToVoid(clone)
+    if not clone or not clone.Parent then return end
+    local root = clone:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local startCF = root.CFrame
+    local voidCF = CFrame.new(AUTO_DESTINATION)
+    local t0 = os.clock()
+    local dur = 0.9
+    task.spawn(function()
+        while clone.Parent and os.clock() - t0 < dur do
+            local a = math.clamp((os.clock() - t0) / dur, 0, 1)
+            local eased = a * a
+            local pos = startCF.Position:Lerp(voidCF.Position, eased)
+            local spin = CFrame.Angles(0, a * math.pi * 6, 0)
+            pcall(function() root.CFrame = CFrame.new(pos) * spin end)
+            RunService.Heartbeat:Wait()
+        end
+        if clone.Parent then clone:Destroy() end
+    end)
+end
+
+--====================================================
+-- THROW SEAT KE VOID (V25: lerp per-frame, bukan PivotTo instan)
+--====================================================
+local function easeFlight(a)
+    if FLIGHT_EASING == "quadIn" then return a * a end
+    if FLIGHT_EASING == "cubicIn" then return a * a * a end
+    if FLIGHT_EASING == "sineIn" then return 1 - math.cos(a * math.pi / 2) end
+    return a
 end
 
 local function autoMoveSeatAndThrow(target, seat)
@@ -865,29 +1004,57 @@ local function autoMoveSeatAndThrow(target, seat)
     local seatedRootPosition = beforeRoot and beforeRoot.Position or origin
     local seatDestinationPosition = origin + (AUTO_DESTINATION - seatedRootPosition)
     local destination = CFrame.new(seatDestinationPosition) * rotation
-    local forward = pose.LookVector
-    local horizontal = Vector3.new(forward.X, 0, forward.Z)
-    if horizontal.Magnitude < 0.01 then horizontal = Vector3.new(1, 0, 0)
-    else horizontal = horizontal.Unit end
-    local velocity = horizontal * AUTO_SIDE_SPEED + Vector3.new(0, -AUTO_DOWN_SPEED, 0)
-    local okMove, errMove = pcall(function() seat:PivotTo(destination) end)
-    if not okMove then return false, "Teleport sofa gagal: " .. tostring(errMove):sub(1, 48) end
-    local okThrow, errThrow = pcall(function()
-        seat.AssemblyLinearVelocity = velocity
-        seat.AssemblyAngularVelocity = Vector3.new(0, AUTO_SPIN_SPEED, 0)
-        seat:ApplyImpulse(velocity * seat.AssemblyMass)
+
+    local wasAnchored = seat.Anchored
+    if wasAnchored then seat.Anchored = false end
+
+    local startCF = seat:GetPivot()
+    local t0 = os.clock()
+    local finished = false
+    local okThrow = true
+
+    task.spawn(function()
+        while seat and seat.Parent and not finished do
+            local elapsed = os.clock() - t0
+            local a = math.clamp(elapsed / FLIGHT_DURATION, 0, 1)
+            local e = easeFlight(a)
+            local pos = startCF.Position:Lerp(destination.Position, e)
+            local rot = startCF.Rotation:Lerp(destination.Rotation, e)
+            local spin = CFrame.Angles(0, e * math.pi * 4, 0)
+            local ok = pcall(function()
+                seat:PivotTo(CFrame.new(pos) * (rot * spin))
+            end)
+            if not ok then okThrow = false end
+            if a >= 1 then finished = true; break end
+            RunService.Heartbeat:Wait()
+        end
+        if seat and seat.Parent then
+            pcall(function()
+                seat.AssemblyLinearVelocity = Vector3.new(0, -80, 0)
+                seat.AssemblyAngularVelocity = Vector3.new(0, AUTO_SPIN_SPEED, 0)
+            end)
+        end
+        if wasAnchored and seat and seat.Parent then
+            task.delay(1.0, function()
+                if seat and seat.Parent then seat.Anchored = true end
+            end)
+        end
     end)
-    if not okThrow then warn("[XLORD V24] Impulse gagal:", tostring(errThrow)) end
-    return true, string.format("Target TP ke X=%.2f Y=%.2f Z=%.2f (awal Y=%.0f); throw=%s",
-        AUTO_DESTINATION.X, AUTO_DESTINATION.Y, AUTO_DESTINATION.Z,
-        beforeY, okThrow and "dicoba" or "gagal")
+
+    return okThrow, string.format(
+        "Target melayang ke void %.1fs | Y awal=%.0f | dest=(%.0f,%.0f,%.0f)",
+        FLIGHT_DURATION, beforeY, AUTO_DESTINATION.X, AUTO_DESTINATION.Y, AUTO_DESTINATION.Z
+    )
 end
 
+--====================================================
+-- RESTORE HP
+--====================================================
 local function tryRestoreOwnHP(character)
     if not character or localPlayer.Character ~= character then return end
     local hum = character:FindFirstChildOfClass("Humanoid")
     if not hum or hum.Health <= 0 then
-        setStatus("Karakter mati: HP tidak bisa dipulihkan dari client. Tunggu respawn.")
+        setStatus("Karakter mati: HP tidak bisa dipulihkan dari client.")
         return
     end
     local priorHP = hum.Health
@@ -898,14 +1065,14 @@ local function tryRestoreOwnHP(character)
     end
     local ok = pcall(function() hum.Health = maxHP end)
     if not ok then setStatus("AUTO selesai | Client tidak bisa mengubah HP") return end
-    setStatus(string.format("AUTO selesai | Tes HP lokal %.0f -> %.0f (cek server)", priorHP, hum.Health))
+    setStatus(string.format("AUTO selesai | Tes HP lokal %.0f -> %.0f", priorHP, hum.Health))
     task.delay(1, function()
         if not gui.Parent or localPlayer.Character ~= character then return end
         local latest = character:FindFirstChildOfClass("Humanoid")
         if not latest then return end
         local suffix = latest.Health < maxHP - 0.5
-            and "HP berubah lagi: server/game membatasi heal"
-            or "HP terlihat penuh di client, belum tentu server"
+            and "HP dibatasi server"
+            or "HP terlihat penuh di client"
         setStatus(string.format("%s | HP %.0f/%.0f", suffix, latest.Health, latest.MaxHealth))
     end)
 end
@@ -922,11 +1089,16 @@ local function watchCharacterDeath(character)
         listen(hum.Died:Connect(function()
             if lastSafeRespawnPivot and os.clock() - lastAutoTimestamp < 14 then
                 pendingRespawnPivot = lastSafeRespawnPivot
-                setStatus("HP = 0. Tunggu respawn normal, coba kembali ke posisi awal...")
+                setStatus("HP = 0. Tunggu respawn normal...")
             end
         end))
     end)
 end
+
+--====================================================
+-- START FLING (V25: approach 2 fase + tunggu Sit + retry seat)
+--====================================================
+local AUTO_SPIN_SPEED = 105
 
 local function startFling()
     if flingRunning then return end
@@ -936,6 +1108,14 @@ local function startFling()
     local root = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
     if not root or not humanoid or humanoid.Health <= 0 then setStatus("Karakter kamu belum siap") return end
+
+    -- Early exit: kalau seat sudah di void
+    local preSeat = getTargetSeat(target)
+    if preSeat and (preSeat.Position - AUTO_DESTINATION).Magnitude < 80 then
+        setStatus("Target sudah di void, batal")
+        return
+    end
+
     flingRunning = true
     flingToken = flingToken + 1
     local myToken = flingToken
@@ -952,6 +1132,8 @@ local function startFling()
                 and localPlayer.Character == character
                 and target.Parent == Players
         end
+
+        -- FASE 1: cek seat dulu, kalau belum duduk → pancing duduk
         local seat, seatError = getTargetSeat(target)
         if not seat then
             setStatus("Menyiapkan sofa dan mendekati target...")
@@ -959,6 +1141,7 @@ local function startFling()
             if not isCurrent() then return end
             if not couch then stopFling(true); setStatus(err or "Gagal mengambil sofa") return end
             activeCouchTool = couch
+
             local okEquip = pcall(function()
                 humanoid:EquipTool(couch)
                 task.wait(0.15)
@@ -966,64 +1149,94 @@ local function startFling()
             end)
             if not isCurrent() then return end
             if not okEquip then stopFling(true); setStatus("Gagal mengaktifkan sofa") return end
-            local push = Instance.new("BodyVelocity")
-            push.Name = "XLORD_AutoPush"
-            push.MaxForce = Vector3.new(200000, 100000, 200000)
-            push.P = 12500; push.Velocity = Vector3.zero
-            push.Parent = root; pushForce = push
-            local spin = Instance.new("BodyAngularVelocity")
-            spin.Name = "XLORD_AutoSpin"
-            spin.MaxTorque = Vector3.new(1e8, 1e8, 1e8)
-            spin.P = 50000; spin.AngularVelocity = Vector3.new(0, 110, 0)
-            spin.Parent = root; spinForce = spin
+
+            -- Approach pakai BodyPosition ke SAMPING target
+            local bp = startApproach(root, nil)
+            setStatus("Mendekati target dari samping...")
+
             local started = os.clock()
-            setStatus("Mencoba menangkap target di sofa (maks. 8 detik)...")
+            local targetLost = false
+
             while isCurrent() and os.clock() - started < MAX_AUTO_WAIT do
-                seat, seatError = getTargetSeat(target)
-                if seat then break end
-                if seatError == "Seat target Anchored" then break end
                 local targetChar = target.Character
                 local theirRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
                 local theirHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
-                if not theirRoot or not theirHum or theirHum.Health <= 0 or humanoid.Health <= 0 then break end
-                local t = os.clock() - started
-                local angle = t * 28
-                local offset = Vector3.new(
-                    math.cos(angle) * 1.3,
-                    math.sin(angle * 3) * 0.8,
-                    math.sin(angle) * 1.3
-                )
-                pcall(function()
-                    root.CFrame = CFrame.new(theirRoot.Position + offset, theirRoot.Position)
-                    local direction = theirRoot.Position - root.Position
-                    if direction.Magnitude > 0.01 then push.Velocity = direction.Unit * 135 end
-                    root.AssemblyAngularVelocity = Vector3.new(0, 110, 0)
-                end)
-                RunService.Heartbeat:Wait()
+                if not theirRoot or not theirHum or theirHum.Health <= 0 or humanoid.Health <= 0 then
+                    targetLost = true
+                    break
+                end
+
+                local dist = (root.Position - theirRoot.Position).Magnitude
+                if dist > EARLY_EXIT_DISTANCE then
+                    targetLost = true
+                    break
+                end
+
+                -- Cek seat setiap iterasi
+                seat, seatError = getTargetSeat(target)
+                if seat then break end
+
+                -- Tunggu Sit dulu (lebih efisien)
+                if not theirHum.Sit then
+                    -- Approach ke samping (bukan nempel)
+                    local sidePos = theirRoot.Position + theirRoot.CFrame.RightVector * APPROACH_SIDE_OFFSET
+                    if bp and bp.Parent then
+                        bp.Position = Vector3.new(sidePos.X, theirRoot.Position.Y, sidePos.Z)
+                    end
+                    RunService.Heartbeat:Wait()
+                else
+                    -- Sudah Sit tapi seat belum terdeteksi → retry
+                    for attempt = 1, SEAT_RETRY do
+                        seat, seatError = getTargetSeat(target)
+                        if seat then break end
+                        task.wait(SEAT_RETRY_WAIT)
+                    end
+                    if seat then break end
+                end
+            end
+
+            if bp then bp:Destroy(); approachForce = nil end
+            if not isCurrent() then return end
+
+            if not seat then
+                stopFling(true)
+                setStatus("Auto dibatalkan: " .. (seatError or "target tidak duduk dalam "
+                    .. MAX_AUTO_WAIT .. " detik"))
+                return
             end
         end
+
         if not isCurrent() then return end
-        if not seat then
-            stopFling(true)
-            setStatus("Auto dibatalkan: " .. (seatError or "target tidak duduk dalam 8 detik"))
-            return
-        end
         if pushForce then pushForce:Destroy(); pushForce = nil end
         if spinForce then spinForce:Destroy(); spinForce = nil end
+        if approachForce then approachForce:Destroy(); approachForce = nil end
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-        setStatus("Target duduk! TP ke X=52.65 Y=-573 Z=279.75...")
+
+        -- FASE 2: spawn 5 bayangan
+        spawnShadowClones(target.Character)
+        task.wait(0.35)
+        if not isCurrent() then return end
+
+        local winner, winDist = pickWinningClone(target.Character)
+        if winner then
+            setStatus(string.format("Bayangan menang (%.1f studs) → terbang ke void", winDist or 0))
+            sendCloneToVoid(winner)
+        end
+
+        -- FASE 3: throw seat ASLI ke void (lerp)
+        setStatus("Target duduk! Mengirim ke void...")
         local okMove, result = autoMoveSeatAndThrow(target, seat)
         if not isCurrent() then return end
         if not okMove then stopFling(true); setStatus(result) return end
-        task.wait(0.18)
+
+        task.wait(FLIGHT_DURATION + 0.2)
         if not isCurrent() then return end
-        setStatus("Teleport selesai. Melepas sofa...")
+
+        setStatus("Selesai: " .. result .. " | Sofa lepas, kamu kembali")
         releaseOwnCouch()
-        task.wait(0.08)
-        if not isCurrent() then return end
+        task.delay(CLONE_LIFETIME, clearClones)
         stopFling(true)
-        setStatus("AUTO selesai: " .. result .. " | Sofa lepas, kamu kembali")
         lastAutoTimestamp = os.clock()
         tryRestoreOwnHP(character)
     end)
@@ -1031,7 +1244,7 @@ end
 
 listen(teleport.MouseButton1Click:Connect(teleportToSelected))
 listen(fling.MouseButton1Click:Connect(function()
-    if flingRunning then stopFling(true); setStatus("Auto Sofa dibatalkan, kembali ke posisi awal")
+    if flingRunning then stopFling(true); setStatus("Auto Sofa dibatalkan")
     else startFling() end
 end))
 listen(localPlayer.CharacterAdded:Connect(function(newCharacter)
@@ -1048,7 +1261,8 @@ listen(localPlayer.CharacterAdded:Connect(function(newCharacter)
             if localPlayer.Character ~= newCharacter or hum.Health <= 0 then return end
             local ok = pcall(function() newCharacter:PivotTo(destination) end)
             if ok then
-                setStatus(string.format("Respawn selesai. HP: %.0f/%.0f | Kembali dicoba", hum.Health, hum.MaxHealth))
+                setStatus(string.format("Respawn selesai. HP: %.0f/%.0f | Kembali dicoba",
+                    hum.Health, hum.MaxHealth))
             end
         end)
     end
@@ -1144,7 +1358,7 @@ local prompt = Instance.new("TextLabel")
 prompt.Size = UDim2.new(1, -14, 0, 77)
 prompt.Position = UDim2.fromOffset(7, 6)
 prompt.BackgroundTransparency = 1
-prompt.Text = "Yakin ingin menutup\nXLORD V24?"
+prompt.Text = "Yakin ingin menutup\nXLORD V25?"
 prompt.TextColor3 = Color3.new(1, 1, 1)
 prompt.Font = Enum.Font.GothamBold
 prompt.TextSize = 15
@@ -1451,7 +1665,7 @@ propBind(propBtn.MouseButton1Click, function()
     notify("Scanning prop...")
     local found, fallbackScan = scanProps()
     if #found == 0 then notify("Prop tidak ditemukan. Spawn manual dahulu.") return end
-    if fallbackScan then notify("Prop pemilik tidak terdeteksi dari nama; pilih kandidat prop yang sesuai") end
+    if fallbackScan then notify("Prop pemilik tidak terdeteksi; pilih kandidat yang sesuai") end
     if #found == 1 then selectProp(found[1]) return end
     local items = {}
     for i, data in ipairs(found) do
@@ -1572,4 +1786,5 @@ gui.Destroying:Connect(function()
 end)
 
 refreshPlayers()
-print("[XLORD V24] Loaded: Auto Sofa, Teleport, TARIK, LIHAT, trampoline TEST, XYZ tunggal di header, resize, minimize")
+print("[XLORD V25] Loaded: Auto Sofa (unanchor+retry+Sit-wait), Void lerp "
+    .. FLIGHT_DURATION .. "s, 5 bayangan, Teleport, TARIK, LIHAT, Trampoline, XYZ, Resize, Prop")
