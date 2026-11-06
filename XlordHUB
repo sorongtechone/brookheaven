@@ -1,12 +1,4 @@
---====================================================
--- XLORD HUB V25 | BROOKHAVEN RP
--- V25:
---   * Auto Sofa: unanchor seat, toleransi occupant telat, retry seat,
---     tunggu Sit, approach BodyPosition samping, MAX_AUTO_WAIT 15s
---   * Void: animasi lerp per-frame (FLIGHT_DURATION), easing quadIn, spin
---   * 5 bayangan: clone visual mengepung target, pemenang terbang ke void
---   * Semua fitur V24 dipertahankan
---====================================================
+
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
